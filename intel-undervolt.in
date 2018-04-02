@@ -19,6 +19,7 @@ indices=()
 names=()
 values=()
 tdp=()
+tjoffset=
 error=
 
 function apply() {
@@ -59,6 +60,13 @@ function tdp() {
   local short="$1"
   local long="$2"
   tdp=("`printf '%03x' $(("$short" * 8))`" "`printf '%03x' $(("$long" * 8))`")
+}
+
+function tjoffset() {
+  local offset="$1"
+  [ "$1" -gt '63' ] && offset='63'
+  [ "$1" -lt '0' ] && offset='0'
+  tjoffset="`printf '0x%02x000000' "$offset"`"
 }
 
 { source '@SYSCONFDIR@/intel-undervolt.conf' && [ -z "$error" ]; } || {
@@ -122,6 +130,20 @@ case "$1" in
       }
     }
 
+    [ -n "$tjoffset" ] && {
+      echo
+
+      offset="`ioutils msr 0x1a2 |
+      awk '{ print(and(rshift(strtonum($1), 24), 0x3f)) }'`"
+      [ "$?" = '0' ] && {
+        echo "Critical offset: -${offset}°C"
+        true
+      } || {
+        echo "Failed to read temperature offset value" >&2
+        success=false
+      }
+    }
+
     "$success"
     exit $?
     ;;
@@ -165,6 +187,30 @@ case "$1" in
         }
       } || {
         echo "Failed to read TDP values" >&2
+        success=false
+      }
+    }
+
+    [ -n "$tjoffset" ] && {
+      echo
+
+      value="`ioutils msr 0x1a2`"
+      value="${value:0:10}`awk 'BEGIN { printf("%08x",
+      or(and('"0x${value:10:8}"', 0xc0ffffff), '"$tjoffset"')) }'`"
+
+      ioutils msr 0x1a2 "$value"
+      [ "$?" = '0' ] && {
+        offset="`ioutils msr 0x1a2 |
+        awk '{ print(and(rshift(strtonum($1), 24), 0x3f)) }'`"
+        [ "$?" = '0' ] && {
+          echo "Critical offset: -${offset}°C"
+          true
+        } || {
+          echo "Failed to read temperature offset value" >&2
+          success=false
+        }
+      } || {
+        echo "Failed to write temperature offset value" >&2
         success=false
       }
     }

@@ -3,7 +3,7 @@
 intel-undervolt is a tool for undervolting Haswell and never Intel CPU using MSR.
 This tool is based on the content of [this article](https://github.com/mihic/linux-intel-undervolt).
 
-This tool also allow to alter power limits using MSR and MCHBAR registers.
+This tool also allow to alter power limits and temperature limit using MSR and MCHBAR registers.
 
 ## Disclaimer
 
@@ -30,11 +30,13 @@ For example, you can write `apply 2 'CPU Cache' -25.84` in order to undervolt CP
 `tdp ${short_term} ${long_term}` can be used in order to alter short term and long term power limits.
 For example, `tdp 35 25`.
 
+### Temperature Limit
+
+`tjoffset ${temperature_offset}` can be used in order to alter temperature limit. This value is subtracted
+from max temperature level. For example, `tjoffset 20`. If max temperature level is set to 100, the resulting
+limit will be set to `100 - 20 = 80°C`.
+
 ### Applying Configuration
 
 Run `intel-undervolt read` to read current values and `intel-undervolt apply` to apply configured values.
 You can apply your configuration automatically enabling `intel-undervolt.service`.
-
-## License
-
-This program is licensed under the terms of the GNU GPLv3 or later.
