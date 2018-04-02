@@ -18,6 +18,7 @@
 indices=()
 names=()
 values=()
+tdp=()
 error=
 
 function apply() {
@@ -51,7 +52,13 @@ function apply() {
 
   indices+=("$index")
   names+=("$name")
-  values+=("$value")
+  values+=("0x00000000$value")
+}
+
+function tdp() {
+  local short="$1"
+  local long="$2"
+  tdp=("`printf '%03x' $(("$short" * 8))`" "`printf '%03x' $(("$long" * 8))`")
 }
 
 { source '@SYSCONFDIR@/intel-undervolt.conf' && [ -z "$error" ]; } || {
@@ -59,12 +66,20 @@ function apply() {
   exit 1
 }
 
+function ioutils() {
+  '@PKGLIBDIR@/ioutils' "$@"
+}
+
 function regval() {
-  echo "0x80000${2}1${1}${3}"
+  echo "0x80000${2}1${1}${3: -8}"
 }
 
 function tomv() {
-  awk '{ printf("%0.2f", and(lshift(1, 32) - rshift(strtonum($1), 21), 0x7ff) / 1.024) }' <<< "0x$1"
+  awk '{ printf("%0.2f", and(lshift(1, 32) - rshift(strtonum($1), 21), 0x7ff) / 1.024) }' <<< "$1"
+}
+
+function towt() {
+  echo $(("0x$1" / 8))
 }
 
 case "$1" in
@@ -73,8 +88,8 @@ case "$1" in
     success=true
 
     for i in `seq 0 $((${#indices[@]} - 1))`; do
-      value="`wrmsr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
-      rdmsr 0x150`"
+      value="`ioutils msr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
+      ioutils msr 0x150`"
 
       [ "$?" = '0' ] && {
         uv="`tomv "$value"`"
@@ -86,6 +101,27 @@ case "$1" in
       }
     done
 
+    [ "${#tdp[@]}" = '2' ] && {
+      echo
+
+      msr_limit="`ioutils msr 0x610`"
+      msr_code="$?"
+      mchbar_limit="`ioutils mem 0xfed159a0`"
+      mchbar_code="$?"
+
+      [ "$msr_code" = '0' ] && [ "$mchbar_code" = '0' ] && {
+        [ ! "$msr_limit" = "$mchbar_limit" ] && {
+          echo "Warning: MSR and MCHBAR values are not equal" >&2
+        }
+
+        echo "Short term TDP: `towt ${msr_limit:7:3}` W"
+        echo "Long term TDP: `towt ${msr_limit:15:3}` W"
+      } || {
+        echo "Failed to read TDP values" >&2
+        success=false
+      }
+    }
+
     "$success"
     exit $?
     ;;
@@ -94,9 +130,9 @@ case "$1" in
     success=true
 
     for i in `seq 0 $((${#indices[@]} - 1))`; do
-      value="`wrmsr 0x150 "\`regval 1 "${indices[$i]}" "${values[$i]}"\`" &&
-      wrmsr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
-      printf '%08x' "0x\`rdmsr 0x150\`"`"
+      value="`ioutils msr 0x150 "\`regval 1 "${indices[$i]}" "${values[$i]}"\`" &&
+      ioutils msr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
+      ioutils msr 0x150`"
 
       [ "$?" = '0' ] && [ "$value" = "${values[$i]}" ] && {
         uv="`tomv "$value"`"
@@ -108,7 +144,33 @@ case "$1" in
       }
     done
 
+    [ "${#tdp[@]}" = '2' ] && {
+      echo
+
+      msr_limit="`ioutils msr 0x610`"
+      msr_code="$?"
+
+      [ "$msr_code" = '0' ] && {
+        new_limit="${msr_limit:0:7}${tdp[0]}${msr_limit:10:5}${tdp[1]}"
+        msr_limit="`ioutils msr 0x610 "$new_limit" &&
+        ioutils mem 0xfed159a0 "$new_limit" &&
+        ioutils msr 0x610`"
+
+        [ "$?" = '0' ] && {
+          echo "Short term TDP: `towt ${msr_limit:7:3}` W"
+          echo "Long term TDP: `towt ${msr_limit:15:3}` W"
+        } || {
+          echo "Failed to write TDP values" >&2
+          success=false
+        }
+      } || {
+        echo "Failed to read TDP values" >&2
+        success=false
+      }
+    }
+
     "$success" && {
+      echo
       echo 'Success'
       true
     }
