@@ -78,16 +78,147 @@ function ioutils() {
   '@PKGLIBDIR@/ioutils' "$@"
 }
 
-function regval() {
-  echo "0x80000${2}1${1}${3: -8}"
+function handle-apply() {
+  local apply="$1"
+  local success=true
+
+  function regval() {
+    echo "0x80000${2}1${1}${3: -8}"
+  }
+
+  function tomv() {
+    awk '{ printf("%0.2f", and(lshift(1, 32) - rshift(strtonum($1), 21),
+    0x7ff) / 1.024) }' <<< "$1"
+  }
+
+  for i in `seq 0 $((${#indices[@]} - 1))`; do
+    local value=''
+    local code
+
+    "$apply" && {
+      ioutils msr 0x150 "`regval 1 "${indices[$i]}" "${values[$i]}"`" &&
+      ioutils msr 0x150 "`regval 0 "${indices[$i]}" 00000000`" &&
+      value="`ioutils msr 0x150`"
+      code="$?"
+
+      [ "$code" = '0' ] && {
+        [ "$value" = "${values[$i]}" ] ||
+        code='1'
+      }
+      true
+    } || {
+      ioutils msr 0x150 "`regval 0 "${indices[$i]}" 00000000`" &&
+      value="`ioutils msr 0x150`"
+      code="$?"
+      true
+    }
+
+    [ "$code" = '0' ] && {
+      local uv="`tomv "$value"`"
+      echo "${names[$i]} (${indices[$i]}): -$uv mV"
+      true
+    } || {
+      local op
+      "$apply" && op=write || op=read
+      echo "Failed to $op value for ${names[$i]} (${indices[$i]})" >&2
+      success=false
+      true
+    }
+  done
+
+  "$success"
 }
 
-function tomv() {
-  awk '{ printf("%0.2f", and(lshift(1, 32) - rshift(strtonum($1), 21), 0x7ff) / 1.024) }' <<< "$1"
+function handle-tdp() {
+  local apply="$1"
+  local success=true
+
+  function towt() {
+    echo $(("0x$1" / 8))
+  }
+
+  [ "${#tdp[@]}" = '2' ] && {
+    echo
+
+    local msr_limit="`ioutils msr 0x610`"
+    local mchbar_limit="`ioutils mem 0xfed159a0`"
+
+    [ -n "$msr_limit" ] && [ -n "$mchbar_limit" ] && {
+      local code
+
+      "$apply" && {
+        local new_limit="${msr_limit:0:7}${tdp[0]}${msr_limit:10:5}${tdp[1]}"
+        ioutils msr 0x610 "$new_limit" &&
+        ioutils mem 0xfed159a0 "$new_limit" &&
+        msr_limit="`ioutils msr 0x610`"
+        code="$?"
+        true
+      } || {
+        [ ! "$msr_limit" = "$mchbar_limit" ] && {
+          echo "Warning: MSR and MCHBAR values are not equal" >&2
+        }
+        code='0'
+        true
+      }
+
+      [ "$code" = '0' ] && {
+        echo "Short term TDP: `towt ${msr_limit:7:3}` W"
+        echo "Long term TDP: `towt ${msr_limit:15:3}` W"
+        true
+      } || {
+        echo "Failed to write TDP values" >&2
+        success=false
+        true
+      }
+      true
+    } || {
+      echo "Failed to read TDP values" >&2
+      success=false
+      true
+    }
+  }
+
+  "$success"
 }
 
-function towt() {
-  echo $(("0x$1" / 8))
+function handle-tjoffset() {
+  local apply="$1"
+  local success=true
+
+  [ -n "$tjoffset" ] && {
+    echo
+
+    local apply_code=0
+    "$apply" && {
+      local value="`ioutils msr 0x1a2`"
+      value="${value:0:10}`awk 'BEGIN { printf("%08x",
+      or(and('"0x${value:10:8}"', 0xc0ffffff), '"$tjoffset"')) }'`"
+      ioutils msr 0x1a2 "$value"
+      apply_code="$?"
+    }
+
+    [ "$apply_code" = '0' ] && {
+      local offset="`ioutils msr 0x1a2`"
+
+      [ -n "$offset" ] && {
+        offset="`awk '{ print(and(rshift(strtonum($1), 24),
+        0x3f)) }' <<< "$offset"`"
+        echo "Critical offset: -${offset}°C"
+        true
+      } || {
+        echo "Failed to read temperature offset value" >&2
+        success=false
+        true
+      }
+      true
+    } || {
+      echo "Failed to write temperature offset value" >&2
+      success=false
+      true
+    }
+  }
+
+  "$success"
 }
 
 case "$1" in
@@ -95,54 +226,9 @@ case "$1" in
     grep -q '^msr ' /proc/modules || modprobe msr
     success=true
 
-    for i in `seq 0 $((${#indices[@]} - 1))`; do
-      value="`ioutils msr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
-      ioutils msr 0x150`"
-
-      [ "$?" = '0' ] && {
-        uv="`tomv "$value"`"
-        echo "${names[$i]} (${indices[$i]}): -$uv mV"
-        true
-      } || {
-        echo "Failed to read value for ${names[$i]} (${indices[$i]})" >&2
-        success=false
-      }
-    done
-
-    [ "${#tdp[@]}" = '2' ] && {
-      echo
-
-      msr_limit="`ioutils msr 0x610`"
-      msr_code="$?"
-      mchbar_limit="`ioutils mem 0xfed159a0`"
-      mchbar_code="$?"
-
-      [ "$msr_code" = '0' ] && [ "$mchbar_code" = '0' ] && {
-        [ ! "$msr_limit" = "$mchbar_limit" ] && {
-          echo "Warning: MSR and MCHBAR values are not equal" >&2
-        }
-
-        echo "Short term TDP: `towt ${msr_limit:7:3}` W"
-        echo "Long term TDP: `towt ${msr_limit:15:3}` W"
-      } || {
-        echo "Failed to read TDP values" >&2
-        success=false
-      }
-    }
-
-    [ -n "$tjoffset" ] && {
-      echo
-
-      offset="`ioutils msr 0x1a2 |
-      awk '{ print(and(rshift(strtonum($1), 24), 0x3f)) }'`"
-      [ "$?" = '0' ] && {
-        echo "Critical offset: -${offset}°C"
-        true
-      } || {
-        echo "Failed to read temperature offset value" >&2
-        success=false
-      }
-    }
+    handle-apply false || success=false
+    handle-tdp false || success=false
+    handle-tjoffset false || success=false
 
     "$success"
     exit $?
@@ -151,69 +237,9 @@ case "$1" in
     grep -q '^msr ' /proc/modules || modprobe msr
     success=true
 
-    for i in `seq 0 $((${#indices[@]} - 1))`; do
-      value="`ioutils msr 0x150 "\`regval 1 "${indices[$i]}" "${values[$i]}"\`" &&
-      ioutils msr 0x150 "\`regval 0 "${indices[$i]}" 00000000\`" &&
-      ioutils msr 0x150`"
-
-      [ "$?" = '0' ] && [ "$value" = "${values[$i]}" ] && {
-        uv="`tomv "$value"`"
-        echo "${names[$i]} (${indices[$i]}): -$uv mV"
-        true
-      } || {
-        echo "Failed to write value for ${names[$i]} (${indices[$i]})" >&2
-        success=false
-      }
-    done
-
-    [ "${#tdp[@]}" = '2' ] && {
-      echo
-
-      msr_limit="`ioutils msr 0x610`"
-      msr_code="$?"
-
-      [ "$msr_code" = '0' ] && {
-        new_limit="${msr_limit:0:7}${tdp[0]}${msr_limit:10:5}${tdp[1]}"
-        msr_limit="`ioutils msr 0x610 "$new_limit" &&
-        ioutils mem 0xfed159a0 "$new_limit" &&
-        ioutils msr 0x610`"
-
-        [ "$?" = '0' ] && {
-          echo "Short term TDP: `towt ${msr_limit:7:3}` W"
-          echo "Long term TDP: `towt ${msr_limit:15:3}` W"
-        } || {
-          echo "Failed to write TDP values" >&2
-          success=false
-        }
-      } || {
-        echo "Failed to read TDP values" >&2
-        success=false
-      }
-    }
-
-    [ -n "$tjoffset" ] && {
-      echo
-
-      value="`ioutils msr 0x1a2`"
-      value="${value:0:10}`awk 'BEGIN { printf("%08x",
-      or(and('"0x${value:10:8}"', 0xc0ffffff), '"$tjoffset"')) }'`"
-
-      ioutils msr 0x1a2 "$value"
-      [ "$?" = '0' ] && {
-        offset="`ioutils msr 0x1a2 |
-        awk '{ print(and(rshift(strtonum($1), 24), 0x3f)) }'`"
-        [ "$?" = '0' ] && {
-          echo "Critical offset: -${offset}°C"
-          true
-        } || {
-          echo "Failed to read temperature offset value" >&2
-          success=false
-        }
-      } || {
-        echo "Failed to write temperature offset value" >&2
-        success=false
-      }
-    }
+    handle-apply true || success=false
+    handle-tdp true || success=false
+    handle-tjoffset true || success=false
 
     "$success" && {
       echo
