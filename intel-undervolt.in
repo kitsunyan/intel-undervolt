@@ -88,7 +88,7 @@ function handle-apply() {
 
   function tomv() {
     awk '{ printf("%0.2f", and(lshift(1, 32) - rshift(strtonum($1), 21),
-    0x7ff) / 1.024) }' <<< "$1"
+    0x7ff) / 1.024) }' <<< "0x${1: -8}"
   }
 
   for i in `seq 0 $((${#indices[@]} - 1))`; do
@@ -102,7 +102,7 @@ function handle-apply() {
       code="$?"
 
       [ "$code" = '0' ] && {
-        [ "$value" = "${values[$i]}" ] ||
+        [ "${value: -8}" = "${values[$i]: -8}" ] ||
         code='1'
       }
       true
