@@ -33,7 +33,7 @@ For example, `tdp 35 25`.
 ### Temperature Limit
 
 `tjoffset ${temperature_offset}` can be used in order to alter temperature limit. This value is subtracted
-from max temperature level. For example, `tjoffset 20`. If max temperature level is set to 100, the resulting
+from max temperature level. For example, `tjoffset -20`. If max temperature level is set to 100, the resulting
 limit will be set to `100 - 20 = 80°C`.
 
 ### Applying Configuration

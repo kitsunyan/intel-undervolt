@@ -36,7 +36,7 @@ function apply() {
   [ "${uv:0:1}" = '-' ] && uv="${uv:1}"
   grep -Pxq '\d+(\.\d+)?' <<< "$uv" || {
     error=1
-    echo "Invalid index: '$index'" >&2
+    echo "Invalid value: '$uv'" >&2
     return 1
   }
 
@@ -64,8 +64,15 @@ function tdp() {
 
 function tjoffset() {
   local offset="$1"
-  [ "$1" -gt '63' ] && offset='63'
-  [ "$1" -lt '0' ] && offset='0'
+  [ "${offset:0:1}" = '-' ] && offset="${offset:1}"
+
+  grep -Pxq '\d+' <<< "$offset" || {
+    error=1
+    echo "Invalid value: '$offset'" >&2
+    return 1
+  }
+
+  [ "$offset" -gt '63' ] && offset='63'
   tjoffset="`printf '0x%02x000000' "$offset"`"
 }
 
