@@ -59,6 +59,21 @@ function apply() {
 function tdp() {
   local short="$1"
   local long="$2"
+
+  grep -Pxq '\d+' <<< "$short" || {
+    error=1
+    echo "Invalid value: '$short'" >&2
+    return 1
+  }
+
+  grep -Pxq '\d+' <<< "$long" || {
+    error=1
+    echo "Invalid value: '$long'" >&2
+    return 1
+  }
+
+  [ "$short" -gt '511' ] && offset='511'
+  [ "$long" -gt '511' ] && offset='511'
   tdp=("`printf '%03x' $(("$short" * 8))`" "`printf '%03x' $(("$long" * 8))`")
 }
 
