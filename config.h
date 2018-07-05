@@ -6,6 +6,7 @@
 #define MEM_ADDR_TDP 0xfed159a0
 #define MSR_ADDR_TDP 0x610
 #define MSR_ADDR_TEMPERATURE 0x1a2
+#define MSR_ADDR_UNITS 0x606
 #define MSR_ADDR_VOLTAGE 0x150
 
 typedef struct {
@@ -21,7 +22,9 @@ typedef struct {
 	uv_list_t * uv;
 	bool tdp_apply;
 	int tdp_short_term;
+	float tdp_short_time_window;
 	int tdp_long_term;
+	float tdp_long_time_window;
 	void * tdp_mem;
 	bool tjoffset_apply;
 	float tjoffset;

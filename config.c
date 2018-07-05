@@ -151,17 +151,27 @@ config_t * load_config(config_t * old_config) {
 				iuv_read_line_error();
 				tmp = NULL;
 				int tdp_short_term = (int) strtol(line, &tmp, 10);
+				float tdp_short_time_window = -1;
+				if (tmp && tmp[0] == '/' && tmp[1]) {
+					tdp_short_time_window = strtof(&tmp[1], &tmp);
+				}
 				if (!line[0] || tmp && tmp[0]) {
 					iuv_print_break("Invalid TDP: %s\n", line);
 				}
 				config->tdp_short_term = tdp_short_term;
+				config->tdp_short_time_window = tdp_short_time_window;
 				iuv_read_line_error();
 				tmp = NULL;
 				int tdp_long_term = (int) strtol(line, &tmp, 10);
+				float tdp_long_time_window = -1;
+				if (tmp && tmp[0] == '/' && tmp[1]) {
+					tdp_long_time_window = strtof(&tmp[1], &tmp);
+				}
 				if (!line[0] || tmp && tmp[0]) {
 					iuv_print_break("Invalid TDP: %s\n", line);
 				}
 				config->tdp_long_term = tdp_long_term;
+				config->tdp_long_time_window = tdp_long_time_window;
 				config->tdp_apply = true;
 			} else if (!strcmp(line, "tjoffset")) {
 				iuv_read_line_error();

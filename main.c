@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <math.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
@@ -95,6 +96,40 @@ static bool undervolt(config_t * config, bool * nl, bool write) {
 	}
 }
 
+static float tdp_to_seconds(int value, int time_unit) {
+	float multiplier = 1 + ((value >> 6) & 0x3) / 4.f;
+	int exponent = (value >> 1) & 0x1f;
+	return exp2f(exponent) * multiplier / time_unit;
+}
+
+static int tdp_from_seconds(float seconds, int time_unit) {
+	if (log2f(seconds * time_unit / 1.75f) >= 0x1f) {
+		return 0xfe;
+	} else {
+		int i;
+		float last_diff = 1.f;
+		int last_result = 0;
+		for (i = 0; i < 4; i++) {
+			float multiplier = 1 + (i / 4.f);
+			float value = seconds * time_unit / multiplier;
+			float exponent = log2f(value);
+			int exponent_int = (int) exponent;
+			float diff = exponent - exponent_int;
+			if (exponent_int < 0x19 && diff > 0.5f) {
+				exponent_int++;
+				diff = 1.f - diff;
+			}
+			if (exponent_int < 0x20) {
+				if (diff < last_diff) {
+					last_diff = diff;
+					last_result = (i << 6) | (exponent_int << 1);
+				}
+			}
+		}
+		return last_result;
+	}
+}
+
 static bool tdp(config_t * config, bool * nl, bool write) {
 	if (config->tdp_apply) {
 		newline(nl);
@@ -103,9 +138,14 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 
 		u_int64_t msr_limit;
 		u_int64_t mchbar_limit;
+		u_int64_t units;
 		if (rd(config, MSR_ADDR_TDP, msr_limit)) {
 			if (!safe_read_write(mem, &mchbar_limit, false)) {
 				errstr = "Segmentation fault";
+			} else {
+				if (!rd(config, MSR_ADDR_UNITS, units)) {
+					errstr = strerror(errno);
+				}
 			}
 		} else {
 			errstr = strerror(errno);
@@ -114,15 +154,32 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 		if (errstr) {
 			printf("Failed to read TDP values: %s\n", errstr);
 		} else {
+			int power_unit = (int) (exp2f(units & 0xf) + 0.5f);
+			int time_unit = (int) (exp2f((units >> 16) & 0xf) + 0.5f);
+
 			if (write) {
-				u_int64_t masked = msr_limit & 0xfffff000fffff000;
+				int max_tdp = 0x7fff / power_unit;
+				u_int64_t masked = msr_limit & 0xffff8000ffff8000;
 				u_int64_t short_term = config->tdp_short_term < 0 ? 0 :
-					config->tdp_short_term > 511 ? 511 :
-					config->tdp_short_term * 8;
+					config->tdp_short_term > max_tdp ? max_tdp :
+					config->tdp_short_term * power_unit;
 				u_int64_t long_term = config->tdp_long_term < 0 ? 0 :
-					config->tdp_long_term > 511 ? 511 :
-					config->tdp_long_term * 8;
+					config->tdp_long_term > max_tdp ? max_tdp :
+					config->tdp_long_term * power_unit;
 				u_int64_t value = masked | (short_term << 32) | long_term;
+				u_int64_t time;
+				if (config->tdp_short_time_window > 0) {
+					masked = value & 0xff01ffffffffffff;
+					time = tdp_from_seconds(config->tdp_short_time_window,
+						time_unit);
+					value = masked | (time << 48);
+				}
+				if (config->tdp_long_time_window > 0) {
+					masked = value & 0xffffffffff01ffff;
+					time = tdp_from_seconds(config->tdp_long_time_window,
+						time_unit);
+					value = masked | (time << 16);
+				}
 				if (wr(config, MSR_ADDR_TDP, value)) {
 					msr_limit = value;
 					if (!safe_read_write(mem, &value, true)) {
@@ -138,10 +195,20 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 			if (errstr) {
 				printf("Failed to write TDP values: %s\n", errstr);
 			} else {
-				int short_term = ((msr_limit >> 32) & 0xfff) / 8;
-				int long_term = (msr_limit & 0xfff) / 8;
-				printf("Short term TDP: %d W\n", short_term);
-				printf("Long term TDP: %d W\n", long_term);
+				int short_term = ((msr_limit >> 32) & 0x7fff) / power_unit;
+				int long_term = (msr_limit & 0x7fff) / power_unit;
+				bool short_term_enabled = !!((msr_limit >> 15) & 1);
+				bool long_term_enabled = !!((msr_limit >> 47) & 1);
+				float short_term_window = tdp_to_seconds(msr_limit >> 48,
+					time_unit);
+				float long_term_window = tdp_to_seconds(msr_limit >> 16,
+					time_unit);
+				printf("Short term TDP: %d W, %.03f s, %s\n",
+					short_term, short_term_window,
+					(short_term_enabled ? "enabled" : "disabled"));
+				printf("Long term TDP: %d W, %.03f s, %s\n",
+					long_term, long_term_window,
+					(long_term_enabled ? "enabled" : "disabled"));
 			}
 		}
 
