@@ -28,6 +28,7 @@ typedef struct {
 	void * tdp_mem;
 	bool tjoffset_apply;
 	float tjoffset;
+	int interval;
 } config_t;
 
 void uv_list_foreach(uv_list_t * uv,

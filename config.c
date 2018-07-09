@@ -74,6 +74,7 @@ config_t * load_config(config_t * old_config) {
 	config->uv = NULL;
 	config->tdp_apply = false;
 	config->tjoffset_apply = false;
+	config->interval = -1;
 
 	int fd[2];
 	pipe(fd);
@@ -91,6 +92,7 @@ config_t * load_config(config_t * old_config) {
 			"function apply { printf '%s\\0' apply \"$1\" \"$2\" \"$3\"; };"
 			"function tdp { printf '%s\\0' tdp \"$1\" \"$2\"; };"
 			"function tjoffset { printf '%s\\0' tjoffset \"$1\"; };"
+			"function interval { printf '%s\\0' interval \"$1\"; };"
 			"source " SYSCONFDIR "/intel-undervolt.conf",
 			NULL);
 		perror("Exec failed");
@@ -182,6 +184,14 @@ config_t * load_config(config_t * old_config) {
 				}
 				config->tjoffset = tjoffset;
 				config->tjoffset_apply = true;
+			} else if (!strcmp(line, "interval")) {
+				iuv_read_line_error();
+				tmp = NULL;
+				int interval = (int) strtol(line, &tmp, 10);
+				if (!line[0] || tmp && tmp[0]) {
+					iuv_print_break("Invalid interval: %s\n", line);
+				}
+				config->interval = interval;
 			} else {
 				iuv_print_break("Configuration error\n");
 			}

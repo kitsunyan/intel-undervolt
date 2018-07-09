@@ -39,10 +39,12 @@ static bool safe_read_write(u_int64_t * addr, u_int64_t * data, bool write) {
 }
 
 #define newline(nl) { \
-	if (*nl) { \
-		printf("\n"); \
+	if (nl) { \
+		if (*nl) { \
+			printf("\n"); \
+		} \
+		*nl = true; \
 	} \
-	*nl = true; \
 }
 
 typedef struct {
@@ -194,7 +196,7 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 
 			if (errstr) {
 				printf("Failed to write TDP values: %s\n", errstr);
-			} else {
+			} else if (nl) {
 				if ((msr_limit >> 63) & 0x1) {
 					printf("Warning: power limit is locked\n");
 				}
@@ -242,7 +244,7 @@ static bool tjoffset(config_t * config, bool * nl, bool write) {
 
 		if (errstr) {
 			printf("Failed to write temperature offset: %s\n", errstr);
-		} else {
+		} else if (nl) {
 			u_int64_t limit;
 			if (rd(config, MSR_ADDR_TEMPERATURE, limit)) {
 				int offset = (limit & 0x3f000000) >> 24;
@@ -274,17 +276,66 @@ static bool read_apply(bool write) {
 	}
 }
 
+static bool reload_config;
+
+static void sigusr1_handler(int sig) {
+	reload_config = true;
+}
+
+static int daemon_mode() {
+	config_t * config = load_config(NULL);
+	if (config && config->interval <= 0) {
+		fprintf(stderr, "Interval is not specified\n");
+		free_config(config);
+		config = NULL;
+	}
+	if (config) {
+		struct sigaction act;
+		memset(&act, 0, sizeof(struct sigaction));
+		act.sa_handler = sigusr1_handler;
+		sigaction(SIGUSR1, &act, NULL);
+
+		reload_config = false;
+		while (true) {
+			if (reload_config) {
+				reload_config = false;
+				printf("Reloading configuration\n");
+				config = load_config(config);
+				if (config == NULL) {
+					break;
+				}
+			}
+
+			tdp(config, NULL, true);
+			tjoffset(config, NULL, true);
+
+			usleep(config->interval * 1000);
+		}
+	}
+
+	if (config == NULL) {
+		fprintf(stderr, "Failed to setup the program\n");
+		return false;
+	} else {
+		free_config(config);
+		return true;
+	}
+}
+
 int main(int argc, char ** argv) {
 	bool write;
 	if (argc == 2 && !strcmp(argv[1], "read")) {
 		return read_apply(false) ? 0 : 1;
 	} else if (argc == 2 && !strcmp(argv[1], "apply")) {
 		return read_apply(true) ? 0 : 1;
+	} else if (argc == 2 && !strcmp(argv[1], "daemon")) {
+		return daemon_mode() ? 0 : 1;
 	} else {
 		fprintf(stderr,
 			"Usage: intel-undervolt COMMAND\n"
 			"  read      Read and display current values\n"
-			"  apply     Apply values from config file\n");
+			"  apply     Apply values from config file\n"
+			"  daemon    Run in daemon mode\n");
 		return argc == 1 ? 0 : 1;
 	}
 }

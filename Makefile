@@ -21,3 +21,4 @@ install: all
 	install -Dm755 'intel-undervolt' "$(DESTDIR)$(BINDIR)/intel-undervolt"
 	install -Dm644 'intel-undervolt.conf' "$(DESTDIR)$(SYSCONFDIR)/intel-undervolt.conf"
 	install -Dm644 'intel-undervolt.service' "$(DESTDIR)$(UNITDIR)/intel-undervolt.service"
+	install -Dm644 'intel-undervolt-loop.service' "$(DESTDIR)$(UNITDIR)/intel-undervolt-loop.service"
