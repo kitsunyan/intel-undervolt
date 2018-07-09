@@ -195,6 +195,9 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 			if (errstr) {
 				printf("Failed to write TDP values: %s\n", errstr);
 			} else {
+				if ((msr_limit >> 63) & 0x1) {
+					printf("Warning: power limit is locked\n");
+				}
 				int short_term = ((msr_limit >> 32) & 0x7fff) / power_unit;
 				int long_term = (msr_limit & 0x7fff) / power_unit;
 				bool short_term_enabled = !!((msr_limit >> 15) & 1);
