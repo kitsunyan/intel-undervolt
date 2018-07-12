@@ -216,8 +216,8 @@ config_t * load_config(config_t * old_config) {
 						perror("Fork failed");
 						error = true;
 					} else if (pid == 0) {
-						execlp("/usr/bin/modprobe",
-							"/usr/bin/modprobe", "msr", NULL);
+						execlp("/sbin/modprobe",
+							"/sbin/modprobe", "msr", NULL);
 						perror("Exec failed");
 						exit(1);
 					} else {
