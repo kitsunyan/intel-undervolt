@@ -1,6 +1,6 @@
 # intel-undervolt
 
-intel-undervolt is a tool for undervolting Haswell and never Intel CPU using MSR.
+intel-undervolt is a tool for undervolting Haswell and newer Intel CPUs using MSR.
 This tool is based on the content of [this article](https://github.com/mihic/linux-intel-undervolt).
 
 This tool also allow to alter power limits and temperature limit using MSR and MCHBAR registers.
