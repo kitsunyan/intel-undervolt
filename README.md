@@ -31,6 +31,9 @@ For example, you can write `apply 2 'CPU Cache' -25.84` in order to undervolt CP
 `tdp ${short_term} ${long_term}` can be used in order to alter short term and long term
 power limits. For example, `tdp 35 25`.
 
+You can also specify a time window for each limit in seconds. For instance, `tdp 35/5 25/60` for
+5 seconds and 60 seconds respectively.
+
 ### Temperature Limit
 
 `tjoffset ${temperature_offset}` can be used in order to alter temperature limit. This value
@@ -42,3 +45,10 @@ higher than 15°C are allowed only on Skylake and newer.
 
 Run `intel-undervolt read` to read current values and `intel-undervolt apply` to apply configured
 values. You can apply your configuration automatically enabling `intel-undervolt.service`.
+
+### Daemon Mode
+
+Sometimes power and temperature limits could be reset by EC, BIOS, or something else. This behavior
+can be suppressed applying limits periodically. `intel-undervolt-loop.service` allows you to run
+the program and daemon mode which will apply limits with the specified interval. You can change the
+interval using `interval ${interval_in_milliseconds}` configuration paremeter.
