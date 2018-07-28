@@ -21,30 +21,6 @@ static void uv_list_free_item(uv_list_t * uv, void * data) {
 	free(uv);
 }
 
-static bool is_module_loaded(const char * name) {
-	FILE * file = fopen("/proc/modules", "r");
-	if (file) {
-		char * line = NULL;
-		ssize_t linen = 0;
-		int len = strlen(name);
-		while ((getline(&line, &linen, file)) >= 0) {
-			if (strstr(line, name) == line && line[len] == ' ') {
-				free(line);
-				fclose(file);
-				return true;
-			}
-		}
-		if (line) {
-			free(line);
-		}
-		fclose(file);
-		return false;
-	} else {
-		perror("Fopen failed");
-		return true;
-	}
-}
-
 void free_config(config_t * config) {
 	if (config) {
 		uv_list_foreach(config->uv, uv_list_free_item, NULL);
@@ -210,28 +186,25 @@ config_t * load_config(config_t * old_config) {
 
 		if (!error) {
 			if (config->uv || config->tdp_apply || config->tjoffset_apply) {
-				if (!is_module_loaded("msr")) {
-					int pid = fork();
-					if (pid < 0) {
-						perror("Fork failed");
-						error = true;
-					} else if (pid == 0) {
-						execlp("/sbin/modprobe",
-							"/sbin/modprobe", "msr", NULL);
-						perror("Exec failed");
-						exit(1);
-					} else {
-						waitpid(pid, &status, 0);
-						if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 ||
-							!is_module_loaded("msr")) {
-							fprintf(stderr, "Modprobe failed\n");
-							error = 1;
+				if (config->fd_msr < 0) {
+					char * dev = "/dev/cpu/0/msr";
+					int fd = open(dev, O_RDWR | O_SYNC);
+					if (fd < 0) {
+						int pid = fork();
+						if (pid < 0) {
+							perror("Fork failed");
+						} else if (pid == 0) {
+							char * executable = "/sbin/modprobe";
+							execlp(executable, executable, "msr", NULL);
+							perror("Exec failed");
+							exit(1);
+						} else {
+							waitpid(pid, &status, 0);
+							if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+								fd = open(dev, O_RDWR | O_SYNC);
+							}
 						}
 					}
-				}
-
-				if (!error && config->fd_msr < 0) {
-					int fd = open("/dev/cpu/0/msr", O_RDWR | O_SYNC);
 					if (fd >= 0) {
 						config->fd_msr = fd;
 					} else {
