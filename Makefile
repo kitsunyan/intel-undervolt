@@ -24,4 +24,4 @@ install: all
 	install -Dm644 'intel-undervolt-loop.service' "$(DESTDIR)$(UNITDIR)/intel-undervolt-loop.service"
 
 clean:
-	rm -f config.o main.o intel-undervolt
+	rm -fv config.o main.o intel-undervolt
