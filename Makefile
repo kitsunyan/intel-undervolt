@@ -15,7 +15,7 @@ all: \
 	-o $@ -c $<
 
 intel-undervolt: config.o main.o
-	$(CC) -lm $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 install: all
 	install -Dm755 'intel-undervolt' "$(DESTDIR)$(BINDIR)/intel-undervolt"
