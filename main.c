@@ -203,8 +203,8 @@ static bool tdp(config_t * config, bool * nl, bool write) {
 				}
 				int short_term = ((msr_limit >> 32) & 0x7fff) / power_unit;
 				int long_term = (msr_limit & 0x7fff) / power_unit;
-				bool short_term_enabled = !!((msr_limit >> 15) & 1);
-				bool long_term_enabled = !!((msr_limit >> 47) & 1);
+				bool short_term_enabled = !!((msr_limit >> 47) & 1);
+				bool long_term_enabled = !!((msr_limit >> 15) & 1);
 				float short_term_window = tdp_to_seconds(msr_limit >> 48,
 					time_unit);
 				float long_term_window = tdp_to_seconds(msr_limit >> 16,
