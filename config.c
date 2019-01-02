@@ -187,10 +187,10 @@ config_t * load_config(config_t * old_config) {
 		if (!error) {
 			if (config->uv || config->tdp_apply || config->tjoffset_apply) {
 				if (config->fd_msr < 0) {
-#ifdef __linux__
-					char * dev = "/dev/cpu/0/msr";
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+#if IS_FREEBSD
 					char * dev = "/dev/cpuctl0";
+#else
+					char * dev = "/dev/cpu/0/msr";
 #endif
 					int fd = open(dev, O_RDWR | O_SYNC);
 					if (fd < 0) {
@@ -198,12 +198,12 @@ config_t * load_config(config_t * old_config) {
 						if (pid < 0) {
 							perror("Fork failed");
 						} else if (pid == 0) {
-#ifdef __linux__
-							char * executable = "/sbin/modprobe";
-							execlp(executable, executable, "msr", NULL);
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+#if IS_FREEBSD
 							char * executable = "/sbin/kldload";
 							execlp(executable, executable, "cpuctl", NULL);
+#else
+							char * executable = "/sbin/modprobe";
+							execlp(executable, executable, "msr", NULL);
 #endif
 							perror("Exec failed");
 							exit(1);

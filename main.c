@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <errno.h>
 #include <math.h>
 #include <setjmp.h>
@@ -7,19 +9,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "config.h"
+#if IS_FREEBSD
+#include <sys/cpuctl.h>
+#include <sys/ioccom.h>
+#endif
 
 #define absf(x) ((x) < 0 ? -(x) : (x))
 
-#ifdef __linux__
-#define rd(c, a, t) (pread(c->fd_msr, &(t), 8, (a)) == 8)
-#define wr(c, a, t) (pwrite(c->fd_msr, &(t), 8, (a)) == 8)
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-#include <sys/cpuctl.h>
-#include <sys/ioccom.h>
+#if IS_FREEBSD
 
-static inline bool cpuctl_rd(int fd, int a, uint64_t *t) {
+static inline bool cpuctl_rd(int fd, int a, uint64_t * t) {
 	cpuctl_msr_args_t args;
 	args.msr = a;
 	if (ioctl(fd, CPUCTL_RDMSR, &args) == -1) {
@@ -29,7 +28,7 @@ static inline bool cpuctl_rd(int fd, int a, uint64_t *t) {
 	return true;
 }
 
-static inline bool cpuctl_wr(int fd, int a, uint64_t *t) {
+static inline bool cpuctl_wr(int fd, int a, uint64_t * t) {
 	cpuctl_msr_args_t args;
 	args.msr = a;
 	args.data = *t;
@@ -38,6 +37,12 @@ static inline bool cpuctl_wr(int fd, int a, uint64_t *t) {
 
 #define rd(c, a, t) (cpuctl_rd(c->fd_msr, (a), &(t)))
 #define wr(c, a, t) (cpuctl_wr(c->fd_msr, (a), &(t)))
+
+#else
+
+#define rd(c, a, t) (pread(c->fd_msr, &(t), 8, (a)) == 8)
+#define wr(c, a, t) (pwrite(c->fd_msr, &(t), 8, (a)) == 8)
+
 #endif
 
 static jmp_buf sigsegv_handler_jmp_buf;

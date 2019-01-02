@@ -1,5 +1,7 @@
 #include <stdbool.h>
 
+#define IS_FREEBSD defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+
 #define MAP_SIZE 4096UL
 #define MAP_MASK (MAP_SIZE - 1)
 
