@@ -11,8 +11,34 @@
 #include "config.h"
 
 #define absf(x) ((x) < 0 ? -(x) : (x))
+
+#ifdef __linux__
 #define rd(c, a, t) (pread(c->fd_msr, &(t), 8, (a)) == 8)
 #define wr(c, a, t) (pwrite(c->fd_msr, &(t), 8, (a)) == 8)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+#include <sys/cpuctl.h>
+#include <sys/ioccom.h>
+
+static inline bool cpuctl_rd(int fd, int a, uint64_t *t) {
+	cpuctl_msr_args_t args;
+	args.msr = a;
+	if (ioctl(fd, CPUCTL_RDMSR, &args) == -1) {
+		return false;
+	}
+	*t = args.data;
+	return true;
+}
+
+static inline bool cpuctl_wr(int fd, int a, uint64_t *t) {
+	cpuctl_msr_args_t args;
+	args.msr = a;
+	args.data = *t;
+	return ioctl(fd, CPUCTL_WRMSR, &args) != -1;
+}
+
+#define rd(c, a, t) (cpuctl_rd(c->fd_msr, (a), &(t)))
+#define wr(c, a, t) (cpuctl_wr(c->fd_msr, (a), &(t)))
+#endif
 
 static jmp_buf sigsegv_handler_jmp_buf;
 

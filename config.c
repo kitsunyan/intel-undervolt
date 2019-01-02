@@ -187,15 +187,24 @@ config_t * load_config(config_t * old_config) {
 		if (!error) {
 			if (config->uv || config->tdp_apply || config->tjoffset_apply) {
 				if (config->fd_msr < 0) {
+#ifdef __linux__
 					char * dev = "/dev/cpu/0/msr";
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+					char * dev = "/dev/cpuctl0";
+#endif
 					int fd = open(dev, O_RDWR | O_SYNC);
 					if (fd < 0) {
 						int pid = fork();
 						if (pid < 0) {
 							perror("Fork failed");
 						} else if (pid == 0) {
+#ifdef __linux__
 							char * executable = "/sbin/modprobe";
 							execlp(executable, executable, "msr", NULL);
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+							char * executable = "/sbin/kldload";
+							execlp(executable, executable, "cpuctl", NULL);
+#endif
 							perror("Exec failed");
 							exit(1);
 						} else {
