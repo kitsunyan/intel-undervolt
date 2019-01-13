@@ -28,11 +28,11 @@ For example, you can write `apply 2 'CPU Cache' -25.84` in order to undervolt CP
 
 ### Power Limits
 
-`tdp ${short_term} ${long_term}` can be used in order to alter short term and long term
-power limits. For example, `tdp 35 25`.
+`power package ${short_term} ${long_term}` can be used in order to alter short term and long term
+package power limits. For example, `power package 35 25`.
 
-You can also specify a time window for each limit in seconds. For instance, `tdp 35/5 25/60` for
-5 seconds and 60 seconds respectively.
+You can also specify a time window for each limit in seconds. For instance,
+`power package 35/5 25/60` for 5 seconds and 60 seconds respectively.
 
 ### Temperature Limit
 

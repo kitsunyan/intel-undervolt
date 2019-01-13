@@ -1,15 +1,8 @@
 #include <stdbool.h>
+#include <stddef.h>
 
 #define IS_FREEBSD defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-
-#define MAP_SIZE 4096UL
-#define MAP_MASK (MAP_SIZE - 1)
-
-#define MEM_ADDR_TDP 0xfed159a0
-#define MSR_ADDR_TDP 0x610
-#define MSR_ADDR_TEMPERATURE 0x1a2
-#define MSR_ADDR_UNITS 0x606
-#define MSR_ADDR_VOLTAGE 0x150
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
 	void * next;
@@ -18,16 +11,37 @@ typedef struct {
 	float value;
 } uv_list_t;
 
+#define MAP_SIZE 4096UL
+#define MAP_MASK (MAP_SIZE - 1)
+
+#define MSR_ADDR_TEMPERATURE 0x1a2
+#define MSR_ADDR_UNITS 0x606
+#define MSR_ADDR_VOLTAGE 0x150
+
+typedef struct {
+	const char * name;
+	size_t mem_addr;
+	int msr_addr;
+} power_domain_t;
+
+static power_domain_t power_domains[1] = {
+	{ "package", 0xfed159a0, 0x610 }
+};
+
+typedef struct {
+	bool apply;
+	int short_term;
+	float short_time_window;
+	int long_term;
+	float long_time_window;
+	void * mem;
+} power_limit_t;
+
 typedef struct {
 	int fd_msr;
 	int fd_mem;
 	uv_list_t * uv;
-	bool tdp_apply;
-	int tdp_short_term;
-	float tdp_short_time_window;
-	int tdp_long_term;
-	float tdp_long_time_window;
-	void * tdp_mem;
+	power_limit_t power[ARRAY_SIZE(power_domains)];
 	bool tjoffset_apply;
 	float tjoffset;
 	int interval;
@@ -37,4 +51,4 @@ void uv_list_foreach(uv_list_t * uv,
 	void (* callback)(uv_list_t *, void *), void * data);
 
 void free_config(config_t * config);
-config_t * load_config(config_t * old_config);
+config_t * load_config(config_t * old_config, bool * nl);

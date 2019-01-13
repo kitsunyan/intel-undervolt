@@ -27,8 +27,11 @@ void free_config(config_t * config) {
 		if (config->fd_msr >= 0) {
 			close(config->fd_msr);
 		}
-		if (config->tdp_mem) {
-			munmap(config->tdp_mem, MAP_SIZE);
+		int i;
+		for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+			if (config->power[i].mem) {
+				munmap(config->power[i].mem, MAP_SIZE);
+			}
 		}
 		if (config->fd_mem >= 0) {
 			close(config->fd_mem);
@@ -37,7 +40,8 @@ void free_config(config_t * config) {
 	}
 }
 
-config_t * load_config(config_t * old_config) {
+config_t * load_config(config_t * old_config, bool * nl) {
+	int i;
 	config_t * config;
 	if (old_config) {
 		config = old_config;
@@ -48,7 +52,9 @@ config_t * load_config(config_t * old_config) {
 		config->fd_mem = -1;
 	}
 	config->uv = NULL;
-	config->tdp_apply = false;
+	for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+		config->power[i].apply = false;
+	}
 	config->tjoffset_apply = false;
 	config->interval = -1;
 
@@ -60,17 +66,18 @@ config_t * load_config(config_t * old_config) {
 		free_config(config);
 		config = NULL;
 	} else if (pid == 0) {
-		close(1);
-		dup(fd[1]);
 		close(fd[0]);
-		close(fd[1]);
-		execlp("/bin/bash", "/bin/bash", "-c",
-			"function apply { printf '%s\\0' apply \"$1\" \"$2\" \"$3\"; };"
-			"function tdp { printf '%s\\0' tdp \"$1\" \"$2\"; };"
-			"function tjoffset { printf '%s\\0' tjoffset \"$1\"; };"
-			"function interval { printf '%s\\0' interval \"$1\"; };"
+		char fdarg[20];
+		sprintf(fdarg, "%d", fd[1]);
+		execlp("/bin/bash", "/bin/bash", "-c", "readonly fd=$1;"
+			"function pz { printf '%s\\0' \"$@\" >&$fd; };"
+			"function apply { pz apply \"$1\" \"$2\" \"$3\"; };"
+			"function tdp { pz tdp; pz power package \"$1\" \"$2\"; };"
+			"function power { pz power \"$1\" \"$2\" \"$3\"; };"
+			"function tjoffset { pz tjoffset \"$1\"; };"
+			"function interval { pz interval \"$1\"; };"
 			"source " SYSCONFDIR "/intel-undervolt.conf",
-			NULL);
+			"bash", fdarg, NULL);
 		perror("Exec failed");
 		exit(1);
 	} else {
@@ -125,32 +132,43 @@ config_t * load_config(config_t * old_config) {
 				uv->title = title;
 				uv->value = value;
 				config->uv = uv;
-			} else if (!strcmp(line, "tdp")) {
+			} else if (!strcmp(line, "power")) {
+				iuv_read_line_error();
+				int index = -1;
+				for (i = 0; i < ARRAY_SIZE(power_domains); i++) {
+					if (!strcmp(line, power_domains[i].name)) {
+						index = i;
+						break;
+					}
+				}
+				if (index < 0) {
+					iuv_print_break("Invalid domain: %s\n", line);
+				}
 				iuv_read_line_error();
 				tmp = NULL;
-				int tdp_short_term = (int) strtol(line, &tmp, 10);
-				float tdp_short_time_window = -1;
+				int short_term = (int) strtol(line, &tmp, 10);
+				float short_time_window = -1;
 				if (tmp && tmp[0] == '/' && tmp[1]) {
-					tdp_short_time_window = strtof(&tmp[1], &tmp);
+					short_time_window = strtof(&tmp[1], &tmp);
 				}
 				if (!line[0] || tmp && tmp[0]) {
-					iuv_print_break("Invalid TDP: %s\n", line);
+					iuv_print_break("Invalid power value: %s\n", line);
 				}
-				config->tdp_short_term = tdp_short_term;
-				config->tdp_short_time_window = tdp_short_time_window;
+				config->power[index].short_term = short_term;
+				config->power[index].short_time_window = short_time_window;
 				iuv_read_line_error();
 				tmp = NULL;
-				int tdp_long_term = (int) strtol(line, &tmp, 10);
-				float tdp_long_time_window = -1;
+				int long_term = (int) strtol(line, &tmp, 10);
+				float long_time_window = -1;
 				if (tmp && tmp[0] == '/' && tmp[1]) {
-					tdp_long_time_window = strtof(&tmp[1], &tmp);
+					long_time_window = strtof(&tmp[1], &tmp);
 				}
 				if (!line[0] || tmp && tmp[0]) {
-					iuv_print_break("Invalid TDP: %s\n", line);
+					iuv_print_break("Invalid power value: %s\n", line);
 				}
-				config->tdp_long_term = tdp_long_term;
-				config->tdp_long_time_window = tdp_long_time_window;
-				config->tdp_apply = true;
+				config->power[index].long_term = long_term;
+				config->power[index].long_time_window = long_time_window;
+				config->power[index].apply = true;
 			} else if (!strcmp(line, "tjoffset")) {
 				iuv_read_line_error();
 				tmp = NULL;
@@ -168,6 +186,12 @@ config_t * load_config(config_t * old_config) {
 					iuv_print_break("Invalid interval: %s\n", line);
 				}
 				config->interval = interval;
+			} else if (!strcmp(line, "tdp")) {
+				fprintf(stderr, "Warning: 'tdp' option is deprecated, "
+					"use 'power package' instead\n");
+				if (nl) {
+					*nl = true;
+				}
 			} else {
 				iuv_print_break("Configuration error\n");
 			}
@@ -185,7 +209,15 @@ config_t * load_config(config_t * old_config) {
 		}
 
 		if (!error) {
-			if (config->uv || config->tdp_apply || config->tjoffset_apply) {
+			bool need_power_msr = false;
+			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+				if (config->power[i].apply && power_domains[i].msr_addr != 0) {
+					need_power_msr = true;
+					break;
+				}
+			}
+
+			if (config->uv || need_power_msr || config->tjoffset_apply) {
 				if (config->fd_msr < 0) {
 #if IS_FREEBSD
 					char * dev = "/dev/cpuctl0";
@@ -228,34 +260,67 @@ config_t * load_config(config_t * old_config) {
 		}
 
 		if (!error) {
-			if (config->tdp_apply) {
+			bool need_power_mem = false;
+			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+				if (config->power[i].apply && power_domains[i].mem_addr != 0) {
+					need_power_mem = true;
+					break;
+				}
+			}
+
+			if (need_power_mem) {
 				if (config->fd_mem < 0) {
 					int fd = open("/dev/mem", O_RDWR | O_SYNC);
 					if (fd >= 0) {
-						void * base = mmap(0, MAP_SIZE, PROT_READ | PROT_WRITE,
-							MAP_SHARED, fd, MEM_ADDR_TDP & ~MAP_MASK);
-						if (!base || base == MAP_FAILED) {
-							close(fd);
-							perror("Mmap failed\n");
-							error = true;
-						} else {
-							config->fd_mem = fd;
-							config->tdp_mem = base;
-						}
+						config->fd_mem = fd;
 					} else {
-						perror("Failed to open memory device\n");
+						perror("Failed to open memory device");
 						error = true;
 					}
 				}
-			} else if (config->fd_mem >= 0) {
-				munmap(config->tdp_mem, MAP_SIZE);
-				config->tdp_mem = NULL;
-				close(config->fd_mem);
-				config->fd_mem = -1;
+				if (!error) {
+					for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+						if (config->power[i].apply) {
+							size_t mem_addr = power_domains[i].mem_addr;
+							if (mem_addr != 0 && !config->power[i].mem) {
+								void * base = mmap(0, MAP_SIZE,
+									PROT_READ | PROT_WRITE, MAP_SHARED,
+									config->fd_mem, mem_addr & ~MAP_MASK);
+								if (!base || base == MAP_FAILED) {
+									perror("Mmap failed");
+									need_power_mem = false;
+									error = true;
+									break;
+								} else {
+									config->power[i].mem = base;
+								}
+							}
+						} else if (config->power[i].mem) {
+							munmap(config->power[i].mem, MAP_SIZE);
+							config->power[i].mem = NULL;
+						}
+					}
+				}
+			}
+
+			if (!need_power_mem) {
+				for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+					if (config->power[i].mem) {
+						munmap(config->power[i].mem, MAP_SIZE);
+						config->power[i].mem = NULL;
+					}
+				}
+				if (config->fd_mem >= 0) {
+					close(config->fd_mem);
+					config->fd_mem = -1;
+				}
 			}
 		}
 
 		if (error) {
+			if (nl) {
+				*nl = true;
+			}
 			free_config(config);
 			config = NULL;
 		}

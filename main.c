@@ -71,7 +71,7 @@ static bool safe_read_write(uint64_t * addr, uint64_t * data, bool write) {
 }
 
 #define newline(nl) { \
-	if (nl) { \
+	if (nl != NULL) { \
 		if (*nl) { \
 			printf("\n"); \
 		} \
@@ -130,13 +130,13 @@ static bool undervolt(config_t * config, bool * nl, bool write) {
 	}
 }
 
-static float tdp_to_seconds(int value, int time_unit) {
+static float power_to_seconds(int value, int time_unit) {
 	float multiplier = 1 + ((value >> 6) & 0x3) / 4.f;
 	int exponent = (value >> 1) & 0x1f;
 	return exp2f(exponent) * multiplier / time_unit;
 }
 
-static int tdp_from_seconds(float seconds, int time_unit) {
+static int power_from_seconds(float seconds, int time_unit) {
 	if (log2f(seconds * time_unit / 1.75f) >= 0x1f) {
 		return 0xfe;
 	} else {
@@ -164,87 +164,110 @@ static int tdp_from_seconds(float seconds, int time_unit) {
 	}
 }
 
-static bool tdp(config_t * config, bool * nl, bool write) {
-	if (config->tdp_apply) {
+static bool power_limit(config_t * config, int index, bool * nl, bool write) {
+	power_limit_t * power = &config->power[index];
+	power_domain_t * domain = &power_domains[index];
+	if (power->apply) {
 		newline(nl);
-		void * mem = config->tdp_mem + (MEM_ADDR_TDP & MAP_MASK);
+		void * mem = NULL;
+		if (power->mem != NULL) {
+			mem = power->mem + (domain->mem_addr & MAP_MASK);
+		}
 		const char * errstr = NULL;
 
 		uint64_t msr_limit;
-		uint64_t mchbar_limit;
+		uint64_t mem_limit;
 		uint64_t units;
-		if (rd(config, MSR_ADDR_TDP, msr_limit)) {
-			if (!safe_read_write(mem, &mchbar_limit, false)) {
-				errstr = "Segmentation fault";
-			} else {
+		if (domain->msr_addr == 0 || rd(config, domain->msr_addr, msr_limit)) {
+			if (domain->mem_addr == 0 ||
+				safe_read_write(mem, &mem_limit, false)) {
 				if (!rd(config, MSR_ADDR_UNITS, units)) {
 					errstr = strerror(errno);
 				}
+			} else {
+				errstr = "Segmentation fault";
 			}
 		} else {
 			errstr = strerror(errno);
 		}
 
+		if (!errstr) {
+			if (domain->msr_addr == 0) {
+				msr_limit = mem_limit;
+			} else if (domain->mem_addr == 0) {
+				mem_limit = msr_limit;
+			}
+			if (domain->msr_addr == 0 && domain->mem_addr == 0) {
+				errstr = "No method available";
+			}
+		}
+
 		if (errstr) {
-			printf("Failed to read TDP values: %s\n", errstr);
+			printf("Failed to read %s power values: %s\n",
+				domain->name, errstr);
 		} else {
 			int power_unit = (int) (exp2f(units & 0xf) + 0.5f);
 			int time_unit = (int) (exp2f((units >> 16) & 0xf) + 0.5f);
 
 			if (write) {
-				int max_tdp = 0x7fff / power_unit;
+				int max_power = 0x7fff / power_unit;
 				uint64_t masked = msr_limit & 0xffff8000ffff8000;
-				uint64_t short_term = config->tdp_short_term < 0 ? 0 :
-					config->tdp_short_term > max_tdp ? max_tdp :
-					config->tdp_short_term * power_unit;
-				uint64_t long_term = config->tdp_long_term < 0 ? 0 :
-					config->tdp_long_term > max_tdp ? max_tdp :
-					config->tdp_long_term * power_unit;
+				uint64_t short_term = power->short_term < 0 ? 0 :
+					power->short_term > max_power ? max_power :
+					power->short_term * power_unit;
+				uint64_t long_term = power->long_term < 0 ? 0 :
+					power->long_term > max_power ? max_power :
+					power->long_term * power_unit;
 				uint64_t value = masked | (short_term << 32) | long_term;
 				uint64_t time;
-				if (config->tdp_short_time_window > 0) {
+				if (power->short_time_window > 0) {
 					masked = value & 0xff01ffffffffffff;
-					time = tdp_from_seconds(config->tdp_short_time_window,
+					time = power_from_seconds(power->short_time_window,
 						time_unit);
 					value = masked | (time << 48);
 				}
-				if (config->tdp_long_time_window > 0) {
+				if (power->long_time_window > 0) {
 					masked = value & 0xffffffffff01ffff;
-					time = tdp_from_seconds(config->tdp_long_time_window,
+					time = power_from_seconds(power->long_time_window,
 						time_unit);
 					value = masked | (time << 16);
 				}
-				if (wr(config, MSR_ADDR_TDP, value)) {
-					msr_limit = value;
-					if (!safe_read_write(mem, &value, true)) {
+				if (domain->msr_addr == 0 ||
+					wr(config, domain->msr_addr, value)) {
+					if (domain->mem_addr == 0 ||
+						safe_read_write(mem, &value, true)) {
+						msr_limit = value;
+						mem_limit = value;
+					} else {
 						errstr = "Segmentation fault";
 					}
 				} else {
 					errstr = strerror(errno);
 				}
-			} else if (msr_limit != mchbar_limit) {
-				printf("Warning: MSR and MCHBAR values are not equal\n");
+			} else if (msr_limit != mem_limit) {
+				printf("Warning: MSR and memory values are not equal\n");
 			}
 
 			if (errstr) {
-				printf("Failed to write TDP values: %s\n", errstr);
+				printf("Failed to write %s power values: %s\n",
+					domain->name, errstr);
 			} else if (nl) {
 				if ((msr_limit >> 63) & 0x1) {
-					printf("Warning: power limit is locked\n");
+					printf("Warning: %s power limit is locked\n", domain->name);
 				}
 				int short_term = ((msr_limit >> 32) & 0x7fff) / power_unit;
 				int long_term = (msr_limit & 0x7fff) / power_unit;
 				bool short_term_enabled = !!((msr_limit >> 47) & 1);
 				bool long_term_enabled = !!((msr_limit >> 15) & 1);
-				float short_term_window = tdp_to_seconds(msr_limit >> 48,
+				float short_term_window = power_to_seconds(msr_limit >> 48,
 					time_unit);
-				float long_term_window = tdp_to_seconds(msr_limit >> 16,
+				float long_term_window = power_to_seconds(msr_limit >> 16,
 					time_unit);
-				printf("Short term TDP: %d W, %.03f s, %s\n",
-					short_term, short_term_window,
+				printf("Short term %s power: %d W, %.03f s, %s\n",
+					domain->name, short_term, short_term_window,
 					(short_term_enabled ? "enabled" : "disabled"));
-				printf("Long term TDP: %d W, %.03f s, %s\n",
-					long_term, long_term_window,
+				printf("Long term %s power: %d W, %.03f s, %s\n",
+					domain->name, long_term, long_term_window,
 					(long_term_enabled ? "enabled" : "disabled"));
 			}
 		}
@@ -293,12 +316,15 @@ static bool tjoffset(config_t * config, bool * nl, bool write) {
 }
 
 static bool read_apply(bool write) {
-	config_t * config = load_config(NULL);
+	bool nl = false;
+	config_t * config = load_config(NULL, &nl);
 	if (config) {
-		bool nl = false;
 		bool success = true;
+		int i;
 		success &= undervolt(config, &nl, write);
-		success &= tdp(config, &nl, write);
+		for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+			success &= power_limit(config, i, &nl, write);
+		}
 		success &= tjoffset(config, &nl, write);
 		free_config(config);
 		return success;
@@ -315,7 +341,7 @@ static void sigusr1_handler(int sig) {
 }
 
 static int daemon_mode() {
-	config_t * config = load_config(NULL);
+	config_t * config = load_config(NULL, NULL);
 	if (config && config->interval <= 0) {
 		fprintf(stderr, "Interval is not specified\n");
 		free_config(config);
@@ -332,20 +358,23 @@ static int daemon_mode() {
 			if (reload_config) {
 				reload_config = false;
 				printf("Reloading configuration\n");
-				config = load_config(config);
-				if (config == NULL) {
+				config = load_config(config, NULL);
+				if (!config) {
 					break;
 				}
 			}
 
-			tdp(config, NULL, true);
+			int i = 0;
+			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+				power_limit(config, i, NULL, true);
+			}
 			tjoffset(config, NULL, true);
 
 			usleep(config->interval * 1000);
 		}
 	}
 
-	if (config == NULL) {
+	if (!config) {
 		fprintf(stderr, "Failed to setup the program\n");
 		return false;
 	} else {
