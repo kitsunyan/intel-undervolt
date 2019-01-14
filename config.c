@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,8 +7,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-#include "config.h"
 
 void uv_list_foreach(uv_list_t * uv,
 	void (* callback)(uv_list_t *, void *), void * data) {
@@ -42,6 +42,7 @@ void free_config(config_t * config) {
 
 config_t * load_config(config_t * old_config, bool * nl) {
 	int i;
+	bool nll = false;
 	config_t * config;
 	if (old_config) {
 		config = old_config;
@@ -62,6 +63,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 	pipe(fd);
 	int pid = fork();
 	if (pid < 0) {
+		NEW_LINE(nl, nll);
 		perror("Fork failed");
 		free_config(config);
 		config = NULL;
@@ -78,7 +80,6 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			"function interval { pz interval \"$1\"; };"
 			"source " SYSCONFDIR "/intel-undervolt.conf",
 			"bash", fdarg, NULL);
-		perror("Exec failed");
 		exit(1);
 	} else {
 		close(fd[1]);
@@ -92,6 +93,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 
 		#define iuv_print_break(...) { \
 			error = true; \
+			NEW_LINE(nl, nll); \
 			fprintf(stderr, __VA_ARGS__); \
 			break; \
 		}
@@ -187,11 +189,9 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				}
 				config->interval = interval;
 			} else if (!strcmp(line, "tdp")) {
+				NEW_LINE(nl, nll);
 				fprintf(stderr, "Warning: 'tdp' option is deprecated, "
 					"use 'power package' instead\n");
-				if (nl) {
-					*nl = true;
-				}
 			} else {
 				iuv_print_break("Configuration error\n");
 			}
@@ -204,6 +204,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		int status;
 		waitpid(pid, &status, 0);
 		if (!error && (!WIFEXITED(status) || WEXITSTATUS(status) != 0)) {
+			NEW_LINE(nl, nll);
 			fprintf(stderr, "Failed to read configuration\n");
 			error = true;
 		}
@@ -228,6 +229,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					if (fd < 0) {
 						int pid = fork();
 						if (pid < 0) {
+							NEW_LINE(nl, nll);
 							perror("Fork failed");
 						} else if (pid == 0) {
 #if IS_FREEBSD
@@ -237,7 +239,6 @@ config_t * load_config(config_t * old_config, bool * nl) {
 							char * executable = "/sbin/modprobe";
 							execlp(executable, executable, "msr", NULL);
 #endif
-							perror("Exec failed");
 							exit(1);
 						} else {
 							waitpid(pid, &status, 0);
@@ -249,6 +250,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					if (fd >= 0) {
 						config->fd_msr = fd;
 					} else {
+						NEW_LINE(nl, nll);
 						perror("Failed to open MSR device");
 						error = true;
 					}
@@ -274,6 +276,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					if (fd >= 0) {
 						config->fd_mem = fd;
 					} else {
+						NEW_LINE(nl, nll);
 						perror("Failed to open memory device");
 						error = true;
 					}
@@ -287,6 +290,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 									PROT_READ | PROT_WRITE, MAP_SHARED,
 									config->fd_mem, mem_addr & ~MAP_MASK);
 								if (!base || base == MAP_FAILED) {
+									NEW_LINE(nl, nll);
 									perror("Mmap failed");
 									need_power_mem = false;
 									error = true;
@@ -318,9 +322,6 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		}
 
 		if (error) {
-			if (nl) {
-				*nl = true;
-			}
 			free_config(config);
 			config = NULL;
 		}

@@ -1,8 +1,10 @@
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+#include "util.h"
+
 #include <stdbool.h>
 #include <stddef.h>
-
-#define IS_FREEBSD defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
 	void * next;
@@ -52,3 +54,5 @@ void uv_list_foreach(uv_list_t * uv,
 
 void free_config(config_t * config);
 config_t * load_config(config_t * old_config, bool * nl);
+
+#endif

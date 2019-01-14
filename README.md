@@ -50,5 +50,5 @@ values. You can apply your configuration automatically enabling `intel-undervolt
 
 Sometimes power and temperature limits could be reset by EC, BIOS, or something else. This behavior
 can be suppressed applying limits periodically. `intel-undervolt-loop.service` allows you to run
-the program and daemon mode which will apply limits with the specified interval. You can change the
+the program in daemon mode which will apply limits with the specified interval. You can change the
 interval using `interval ${interval_in_milliseconds}` configuration paremeter.
