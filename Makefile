@@ -11,12 +11,14 @@ all: \
 
 intel_undervolt_headers = \
 	config.h \
+	measure.h \
 	modes.h \
 	undervolt.h \
 	util.h
 
 intel_undervolt_sources = \
 	config.c \
+	measure.c \
 	main.c \
 	modes.c \
 	undervolt.c \

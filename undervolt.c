@@ -47,10 +47,10 @@ typedef struct {
 	bool success;
 	bool * nl;
 	bool nll;
-} undervolt_ctx;
+} undervolt_ctx_t;
 
 static void undervolt_it(uv_list_t * uv, void * data) {
-	undervolt_ctx * ctx = data;
+	undervolt_ctx_t * ctx = data;
 
 	static int mask = 0x800;
 	uint64_t uvint = ((uint64_t) (mask - absf(uv->value) * 1.024f + 0.5f)
@@ -83,7 +83,7 @@ static void undervolt_it(uv_list_t * uv, void * data) {
 
 bool undervolt(config_t * config, bool * nl, bool write) {
 	if (config->uv) {
-		undervolt_ctx ctx;
+		undervolt_ctx_t ctx;
 		ctx.config = config;
 		ctx.write = write;
 		ctx.success = true;

@@ -41,10 +41,17 @@ is subtracted from max temperature level. For example, `tjoffset -20`. If max te
 is set to 100, the resulting limit will be set to `100 - 20 = 80°C`. Note that offsets
 higher than 15°C are allowed only on Skylake and newer.
 
+## Usage
+
 ### Applying Configuration
 
 Run `intel-undervolt read` to read current values and `intel-undervolt apply` to apply configured
 values. You can apply your configuration automatically enabling `intel-undervolt.service`.
+
+### Measuring the Power Consumption
+
+`intel_rapl` module is required to measure the power consumption. Run `intel-undervolt measure` to
+display power consumption in interactive mode.
 
 ### Daemon Mode
 

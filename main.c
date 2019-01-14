@@ -1,3 +1,4 @@
+#include "measure.h"
 #include "modes.h"
 
 #include <stdio.h>
@@ -9,6 +10,8 @@ int main(int argc, char ** argv) {
 		return read_apply_mode(false) ? 0 : 1;
 	} else if (argc == 2 && !strcmp(argv[1], "apply")) {
 		return read_apply_mode(true) ? 0 : 1;
+	} else if (argc == 2 && !strcmp(argv[1], "measure")) {
+		return measure_mode();
 	} else if (argc == 2 && !strcmp(argv[1], "daemon")) {
 		return daemon_mode() ? 0 : 1;
 	} else {
@@ -16,6 +19,7 @@ int main(int argc, char ** argv) {
 			"Usage: intel-undervolt COMMAND\n"
 			"  read      Read and display current values\n"
 			"  apply     Apply values from config file\n"
+			"  measure   Measure power consumption\n"
 			"  daemon    Run in daemon mode\n");
 		return argc == 1 ? 0 : 1;
 	}
