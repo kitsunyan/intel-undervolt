@@ -45,7 +45,7 @@ static void write_maxname(const char * name, int maxname) {
 }
 
 static void print_powercap_next(powercap_list_t * lst, int maxname, char * buf,
-	bool * nl, bool * nll) {
+	bool * nl, bool * nll, bool csv) {
 	if (!lst) {
 		return;
 	}
@@ -53,7 +53,7 @@ static void print_powercap_next(powercap_list_t * lst, int maxname, char * buf,
 	if (!nll) {
 		nll = &nlla;
 	}
-	print_powercap_next(lst->next, maxname, buf, nl, nll);
+	print_powercap_next(lst->next, maxname, buf, nl, nll, csv);
 
 	sprintf(buf, DIR_POWERCAP "/%s/energy_uj", lst->dir);
 	int fd = open(buf, O_RDONLY);
@@ -77,18 +77,23 @@ static void print_powercap_next(powercap_list_t * lst, int maxname, char * buf,
 					tdiff.tv_nsec);
 				dval = (double) (val - lst->last) * 1000 / diff;
 			}
-			NEW_LINE(nl, *nll);
-			write_maxname(lst->name, maxname);
-			printf("%9.03f W\n", lst->name, dval);
 			lst->last = val;
 			lst->time = tnow;
+			if (csv) {
+				CSV_SEPARATOR(nl, *nll);
+				printf("%.03f", lst->name, dval);
+			} else {
+				NEW_LINE(nl, *nll);
+				write_maxname(lst->name, maxname);
+				printf("%9.03f W\n", lst->name, dval);
+			}
 		}
 		close(fd);
 	}
 }
 
 static void print_hwmon_next(hwmon_list_t * lst, int maxname, char * buf,
-	char * degstr, bool * nl, bool * nll) {
+	char * degstr, bool * nl, bool * nll, bool csv) {
 	if (!lst) {
 		return;
 	}
@@ -96,7 +101,7 @@ static void print_hwmon_next(hwmon_list_t * lst, int maxname, char * buf,
 	if (!nll) {
 		nll = &nlla;
 	}
-	print_hwmon_next(lst->next, maxname, buf, degstr, nl, nll);
+	print_hwmon_next(lst->next, maxname, buf, degstr, nl, nll, csv);
 
 	sprintf(buf, DIR_HWMON "/%s/temp%d_input", lst->dir, lst->index);
 	int fd = open(buf, O_RDONLY);
@@ -105,16 +110,21 @@ static void print_hwmon_next(hwmon_list_t * lst, int maxname, char * buf,
 		if (count > 0) {
 			buf[buf[count - 1] == '\n' ? count - 1 : count] = '\0';
 			double dval = atol(buf) / 1000.;
-			int len = strlen(lst->name);
-			NEW_LINE(nl, *nll);
-			write_maxname(lst->name, maxname);
-			printf("%9.03f%s\n", dval, degstr);
+			if (csv) {
+				CSV_SEPARATOR(nl, *nll);
+				printf("%.03f", dval);
+			} else {
+				int len = strlen(lst->name);
+				NEW_LINE(nl, *nll);
+				write_maxname(lst->name, maxname);
+				printf("%9.03f%s\n", dval, degstr);
+			}
 		}
 		close(fd);
 	}
 }
 
-static void print_cpufreq(int maxname, char * buf, bool * nl) {
+static void print_cpufreq(int maxname, char * buf, bool * nl, bool csv) {
 	bool nll = false;
 
 	int i;
@@ -128,10 +138,15 @@ static void print_cpufreq(int maxname, char * buf, bool * nl) {
 		if (count > 0) {
 			buf[buf[count - 1] == '\n' ? count - 1 : count] = '\0';
 			double dval = atol(buf) / 1000.;
-			sprintf(buf, "Core %d", i);
-			NEW_LINE(nl, nll);
-			write_maxname(buf, maxname);
-			printf("%9.03f MHz\n", dval);
+			if (csv) {
+				CSV_SEPARATOR(nl, nll);
+				printf("%.03f", dval);
+			} else {
+				sprintf(buf, "Core %d", i);
+				NEW_LINE(nl, nll);
+				write_maxname(buf, maxname);
+				printf("%9.03f MHz\n", dval);
+			}
 		}
 		close(fd);
 	}
@@ -276,16 +291,29 @@ int measure_mode() {
 	hwmon_list_t * coretemp_list = get_coretemp(&maxname);
 	char degstr[5] = " C";
 
+	char * format_env = getenv("FORMAT");
+	bool csv = format_env != NULL && !strcmp(format_env, "csv");
+	char * sleep_env = getenv("SLEEP");
+	double sleep_double = sleep_env != NULL ? atof(sleep_env) : 0;
+	if (sleep_double <= 0) {
+		sleep_double = 1;
+	}
+	struct timespec sleep;
+	sleep.tv_sec = (time_t) sleep_double;
+	sleep.tv_nsec = (suseconds_t) ((sleep_double - sleep.tv_sec) * 1000000000.);
+
 	setlocale(LC_CTYPE, "");
-	iconv_t ic = iconv_open(nl_langinfo(CODESET), "ISO-8859-1");
-	if (ic != (iconv_t) -1) {
-		char in[3] = "\260C";
-		char * inptr = in;
-		char * outptr = degstr;
-		size_t insize = 3;
-		size_t outsize = sizeof(degstr);
-		int x = iconv(ic, &inptr, &insize, &outptr, &outsize);
-		iconv_close(ic);
+	if (!csv) {
+		iconv_t ic = iconv_open(nl_langinfo(CODESET), "ISO-8859-1");
+		if (ic != (iconv_t) -1) {
+			char in[3] = "\260C";
+			char * inptr = in;
+			char * outptr = degstr;
+			size_t insize = 3;
+			size_t outsize = sizeof(degstr);
+			int x = iconv(ic, &inptr, &insize, &outptr, &outsize);
+			iconv_close(ic);
+		}
 	}
 
 	interrupted = false;
@@ -294,18 +322,37 @@ int measure_mode() {
 	act.sa_handler = sigint_handler;
 	sigaction(SIGINT, &act, NULL);
 
-	/* clear the screen */
-	printf("\033[H\033[J");
+	struct timespec csv_start;
+	if (csv) {
+		clock_gettime(CLOCK_MONOTONIC, &csv_start);
+	} else {
+		/* clear the screen */
+		printf("\033[H\033[J");
+	}
 	while (!interrupted) {
-		/* move the cursor */
-		printf("\033[H");
-		fflush(0);
+		if (!csv) {
+			/* move the cursor */
+			printf("\033[H");
+			fflush(0);
+		}
 		bool nl = false;
-		print_powercap_next(powercap_list, maxname, buf, &nl, NULL);
-		print_hwmon_next(coretemp_list, maxname, buf, degstr, &nl, NULL);
-		print_cpufreq(maxname, buf, &nl);
+		if (csv) {
+			struct timespec csv_now;
+			clock_gettime(CLOCK_MONOTONIC, &csv_now);
+			double csv_diff = (csv_now.tv_sec - csv_start.tv_sec) +
+				(csv_now.tv_nsec - csv_start.tv_nsec) / 1000000000.;
+			bool nll = false;
+			CSV_SEPARATOR(&nl, nll);
+			printf("%.03f", csv_diff);
+		}
+		print_powercap_next(powercap_list, maxname, buf, &nl, NULL, csv);
+		print_hwmon_next(coretemp_list, maxname, buf, degstr, &nl, NULL, csv);
+		print_cpufreq(maxname, buf, &nl, csv);
+		if (csv) {
+			printf("\n");
+		}
 		if (!interrupted) {
-			sleep(1);
+			nanosleep(&sleep, NULL);
 		}
 	}
 
