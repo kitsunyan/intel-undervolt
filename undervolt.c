@@ -178,27 +178,29 @@ bool power_limit(config_t * config, int index, bool * nl, bool write) {
 
 			if (write) {
 				int max_power = 0x7fff / power_unit;
-				uint64_t masked = msr_limit & 0xffff8000ffff8000;
-				uint64_t short_term = power->short_term < 0 ? 0 :
-					power->short_term > max_power ? max_power :
-					power->short_term * power_unit;
-				uint64_t long_term = power->long_term < 0 ? 0 :
-					power->long_term > max_power ? max_power :
-					power->long_term * power_unit;
+				uint64_t masked = msr_limit & 0xffff0000ffff0000;
+				uint64_t short_term = power->short_term.power < 0 ? 0 :
+					power->short_term.power > max_power ? max_power :
+					power->short_term.power * power_unit;
+				uint64_t long_term = power->long_term.power < 0 ? 0 :
+					power->long_term.power > max_power ? max_power :
+					power->long_term.power * power_unit;
 				uint64_t value = masked | (short_term << 32) | long_term;
 				uint64_t time;
-				if (power->short_time_window > 0) {
+				if (power->short_term.time_window > 0) {
 					masked = value & 0xff01ffffffffffff;
-					time = power_from_seconds(power->short_time_window,
+					time = power_from_seconds(power->short_term.time_window,
 						time_unit);
 					value = masked | (time << 48);
 				}
-				if (power->long_time_window > 0) {
+				if (power->long_term.time_window > 0) {
 					masked = value & 0xffffffffff01ffff;
-					time = power_from_seconds(power->long_time_window,
+					time = power_from_seconds(power->long_term.time_window,
 						time_unit);
 					value = masked | (time << 16);
 				}
+				value |= (power->short_term.enabled ? 1L << 47 : 0) |
+					(power->long_term.enabled ? 1L << 15 : 0);
 				if (domain->msr_addr == 0 ||
 					wr(config, domain->msr_addr, value)) {
 					if (domain->mem_addr == 0 ||

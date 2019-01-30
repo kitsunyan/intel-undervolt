@@ -40,6 +40,41 @@ void free_config(config_t * config) {
 	}
 }
 
+static bool parse_power_limit_value(const char * line,
+	power_limit_value_t * value) {
+	char * tmp = NULL;
+	char * next = NULL;
+	int power = (int) strtol(line, &tmp, 10);
+	float time_window = -1;
+	bool enabled = true;
+	int n;
+	if (tmp && tmp[0] == '/' && tmp[1]) {
+		time_window = strtof(&tmp[1], &tmp);
+		if (tmp && tmp[0] && tmp[0] != ':') {
+			return false;
+		}
+	}
+	while (tmp && tmp[0] == ':' && tmp[1]) {
+		tmp = &tmp[1];
+		next = strstr(tmp, ":");
+		n = next ? (int) (next - tmp) : strlen(tmp);
+		if (!strncmp("enabled", tmp, n)) {
+			enabled = true;
+		} else if (!strncmp("disabled", tmp, n)) {
+			enabled = false;
+		} else {
+			return false;
+		}
+		tmp = next ? next : NULL;
+	}
+	if (!line[0] || tmp && tmp[0]) {
+		return false;
+	}
+	value->power = power;
+	value->time_window = time_window;
+	value->enabled = enabled;
+}
+
 config_t * load_config(config_t * old_config, bool * nl) {
 	int i;
 	bool nll = false;
@@ -147,29 +182,15 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					iuv_print_break("Invalid domain: %s\n", line);
 				}
 				iuv_read_line_error();
-				tmp = NULL;
-				int short_term = (int) strtol(line, &tmp, 10);
-				float short_time_window = -1;
-				if (tmp && tmp[0] == '/' && tmp[1]) {
-					short_time_window = strtof(&tmp[1], &tmp);
-				}
-				if (!line[0] || tmp && tmp[0]) {
+				if (!parse_power_limit_value(line,
+					&config->power[index].short_term)) {
 					iuv_print_break("Invalid power value: %s\n", line);
 				}
-				config->power[index].short_term = short_term;
-				config->power[index].short_time_window = short_time_window;
 				iuv_read_line_error();
-				tmp = NULL;
-				int long_term = (int) strtol(line, &tmp, 10);
-				float long_time_window = -1;
-				if (tmp && tmp[0] == '/' && tmp[1]) {
-					long_time_window = strtof(&tmp[1], &tmp);
-				}
-				if (!line[0] || tmp && tmp[0]) {
+				if (!parse_power_limit_value(line,
+					&config->power[index].long_term)) {
 					iuv_print_break("Invalid power value: %s\n", line);
 				}
-				config->power[index].long_term = long_term;
-				config->power[index].long_time_window = long_time_window;
 				config->power[index].apply = true;
 			} else if (!strcmp(line, "tjoffset")) {
 				iuv_read_line_error();

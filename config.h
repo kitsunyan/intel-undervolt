@@ -31,11 +31,15 @@ static power_domain_t power_domains[1] = {
 };
 
 typedef struct {
+	int power;
+	float time_window;
+	bool enabled;
+} power_limit_value_t;
+
+typedef struct {
 	bool apply;
-	int short_term;
-	float short_time_window;
-	int long_term;
-	float long_time_window;
+	power_limit_value_t short_term;
+	power_limit_value_t long_term;
 	void * mem;
 } power_limit_t;
 
