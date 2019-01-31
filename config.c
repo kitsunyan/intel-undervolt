@@ -108,7 +108,8 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		sprintf(fdarg, "%d", fd[1]);
 		execlp("/bin/bash", "/bin/bash", "-c", "readonly fd=$1;"
 			"function pz { printf '%s\\0' \"$@\" >&$fd; };"
-			"function apply { pz apply \"$1\" \"$2\" \"$3\"; };"
+			"function apply { pz apply; pz undervolt \"$1\" \"$2\" \"$3\"; };"
+			"function undervolt { pz undervolt \"$1\" \"$2\" \"$3\"; };"
 			"function tdp { pz tdp; pz power package \"$1\" \"$2\"; };"
 			"function power { pz power \"$1\" \"$2\" \"$3\"; };"
 			"function tjoffset { pz tjoffset \"$1\"; };"
@@ -123,6 +124,8 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		ssize_t linen = 0;
 		bool error = false;
 		char * tmp = NULL;
+		bool apply_deprecation = false;
+		bool tdp_deprecation = false;
 
 		#define iuv_read_line() (getdelim(&line, &linen, '\0', file) >= 0)
 
@@ -143,7 +146,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		#define iuv_read_line_error() iuv_read_line_error_action({})
 
 		while (iuv_read_line()) {
-			if (!strcmp(line, "apply")) {
+			if (!strcmp(line, "undervolt")) {
 				iuv_read_line_error();
 				tmp = NULL;
 				int index = (int) strtol(line, &tmp, 10);
@@ -209,10 +212,20 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					iuv_print_break("Invalid interval: %s\n", line);
 				}
 				config->interval = interval;
+			} else if (!strcmp(line, "apply")) {
+				if (!apply_deprecation) {
+					NEW_LINE(nl, nll);
+					fprintf(stderr, "Warning: 'apply' option is deprecated, "
+						"use 'undervolt' instead\n");
+				}
+				apply_deprecation = true;
 			} else if (!strcmp(line, "tdp")) {
-				NEW_LINE(nl, nll);
-				fprintf(stderr, "Warning: 'tdp' option is deprecated, "
-					"use 'power package' instead\n");
+				if (!tdp_deprecation) {
+					NEW_LINE(nl, nll);
+					fprintf(stderr, "Warning: 'tdp' option is deprecated, "
+						"use 'power package' instead\n");
+				}
+				tdp_deprecation = true;
 			} else {
 				iuv_print_break("Configuration error\n");
 			}

@@ -1,9 +1,9 @@
 # intel-undervolt
 
-intel-undervolt is a tool for undervolting Haswell and newer Intel CPUs using MSR.
-This tool is based on the content of [this article](https://github.com/mihic/linux-intel-undervolt).
+intel-undervolt is a tool for undervolting and throttling limits alteration for Intel CPUs.
 
-This tool also allow to alter power limits and temperature limit using MSR and MCHBAR registers.
+Undervolting works on Haswell and newer CPUs and based on the content of
+[this article](https://github.com/mihic/linux-intel-undervolt).
 
 ## Disclaimer
 
@@ -19,27 +19,27 @@ Run `systemctl daemon-reload` to reload unit files.
 
 You can configure parameters in `/etc/intel-undervolt.conf` file.
 
-### Voltage Planes
+### Undervolting
 
-By default it contains all voltage planes like in ThrottleStop utility for Windows.
+By default it contains all voltage domains like in ThrottleStop utility for Windows.
 
-The following syntax is used in the file: `apply ${index} ${display_name} ${undervolt_value}`.
-For example, you can write `apply 2 'CPU Cache' -25.84` in order to undervolt CPU cache by 25.84 mV.
+The following syntax is used in the file: `undervolt ${index} ${display_name} ${undervolt_value}`.
+For example, you can write `undervolt 2 'CPU Cache' -25.84` to undervolt CPU cache by 25.84 mV.
 
 ### Power Limits
 
-`power package ${short_term} ${long_term}` can be used in order to alter short term and long term
-package power limits. For example, `power package 35 25`.
+`power package ${short_term} ${long_term}` can be used to alter short term and long term package
+power limits. For example, `power package 35 25`.
 
 You can also specify a time window for each limit in seconds. For instance,
 `power package 35/5 25/60` for 5 seconds and 60 seconds respectively.
 
 ### Temperature Limit
 
-`tjoffset ${temperature_offset}` can be used in order to alter temperature limit. This value
-is subtracted from max temperature level. For example, `tjoffset -20`. If max temperature level
-is set to 100, the resulting limit will be set to `100 - 20 = 80°C`. Note that offsets
-higher than 15°C are allowed only on Skylake and newer.
+`tjoffset ${temperature_offset}` can be used to alter temperature limit. This value is subtracted
+from max temperature level. For example, `tjoffset -20`. If max temperature is equal to 100°C, the
+resulting limit will be set to `100 - 20 = 80°C`. Note that offsets higher than 15°C are allowed
+only on Skylake and newer.
 
 ## Usage
 
