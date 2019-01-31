@@ -6,7 +6,7 @@
 
 static jmp_buf sigsegv_handler_jmp_buf;
 
-static void sigsegv_handler(int sig) {
+static void sigsegv_handler(UNUSED int sig) {
 	siglongjmp(sigsegv_handler_jmp_buf, 1);
 }
 

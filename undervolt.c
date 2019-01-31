@@ -4,7 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#if IS_FREEBSD
+#ifdef IS_FREEBSD
 #include <sys/cpuctl.h>
 #include <sys/ioccom.h>
 #endif
@@ -12,7 +12,7 @@
 
 #define absf(x) ((x) < 0 ? -(x) : (x))
 
-#if IS_FREEBSD
+#ifdef IS_FREEBSD
 
 static inline bool cpuctl_rd(int fd, int a, uint64_t * t) {
 	cpuctl_msr_args_t args;

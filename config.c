@@ -16,18 +16,18 @@ void uv_list_foreach(uv_list_t * uv,
 	}
 }
 
-static void uv_list_free_item(uv_list_t * uv, void * data) {
+static void uv_list_free_item(uv_list_t * uv, UNUSED void * data) {
 	free(uv->title);
 	free(uv);
 }
 
 void free_config(config_t * config) {
+	unsigned int i;
 	if (config) {
 		uv_list_foreach(config->uv, uv_list_free_item, NULL);
 		if (config->fd_msr >= 0) {
 			close(config->fd_msr);
 		}
-		int i;
 		for (i = 0; i < ARRAY_SIZE(config->power); i++) {
 			if (config->power[i].mem) {
 				munmap(config->power[i].mem, MAP_SIZE);
@@ -57,7 +57,7 @@ static bool parse_power_limit_value(const char * line,
 	while (tmp && tmp[0] == ':' && tmp[1]) {
 		tmp = &tmp[1];
 		next = strstr(tmp, ":");
-		n = next ? (int) (next - tmp) : strlen(tmp);
+		n = next ? (int) (next - tmp) : (int) strlen(tmp);
 		if (!strncmp("enabled", tmp, n)) {
 			enabled = true;
 		} else if (!strncmp("disabled", tmp, n)) {
@@ -67,16 +67,17 @@ static bool parse_power_limit_value(const char * line,
 		}
 		tmp = next ? next : NULL;
 	}
-	if (!line[0] || tmp && tmp[0]) {
+	if (!line[0] || (tmp && tmp[0])) {
 		return false;
 	}
 	value->power = power;
 	value->time_window = time_window;
 	value->enabled = enabled;
+	return true;
 }
 
 config_t * load_config(config_t * old_config, bool * nl) {
-	int i;
+	unsigned int i;
 	bool nll = false;
 	config_t * config;
 	if (old_config) {
@@ -121,7 +122,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		close(fd[1]);
 		FILE * file = fdopen(fd[0], "r");
 		char * line = NULL;
-		ssize_t linen = 0;
+		size_t linen = 0;
 		bool error = false;
 		char * tmp = NULL;
 		bool apply_deprecation = false;
@@ -150,7 +151,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				iuv_read_line_error();
 				tmp = NULL;
 				int index = (int) strtol(line, &tmp, 10);
-				if (!line[0] || tmp && tmp[0]) {
+				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid index: %s\n", line);
 				}
 				iuv_read_line_error();
@@ -162,7 +163,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				});
 				tmp = NULL;
 				float value = strtof(line, &tmp);
-				if (!line[0] || tmp && tmp[0]) {
+				if (!line[0] || (tmp && tmp[0])) {
 					free(title);
 					iuv_print_break("Invalid value: %s\n", line);
 				}
@@ -199,7 +200,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				iuv_read_line_error();
 				tmp = NULL;
 				int tjoffset = (int) strtol(line, &tmp, 10);
-				if (!line[0] || tmp && tmp[0]) {
+				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid tjoffset: %s\n", line);
 				}
 				config->tjoffset = tjoffset;
@@ -208,7 +209,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				iuv_read_line_error();
 				tmp = NULL;
 				int interval = (int) strtol(line, &tmp, 10);
-				if (!line[0] || tmp && tmp[0]) {
+				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid interval: %s\n", line);
 				}
 				config->interval = interval;
@@ -254,7 +255,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 
 			if (config->uv || need_power_msr || config->tjoffset_apply) {
 				if (config->fd_msr < 0) {
-#if IS_FREEBSD
+#ifdef IS_FREEBSD
 					char * dev = "/dev/cpuctl0";
 #else
 					char * dev = "/dev/cpu/0/msr";
@@ -266,7 +267,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 							NEW_LINE(nl, nll);
 							perror("Fork failed");
 						} else if (pid == 0) {
-#if IS_FREEBSD
+#ifdef IS_FREEBSD
 							char * executable = "/sbin/kldload";
 							execlp(executable, executable, "cpuctl", NULL);
 #else

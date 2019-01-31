@@ -5,7 +5,6 @@
 #include <string.h>
 
 int main(int argc, char ** argv) {
-	bool write;
 	if (argc == 2 && !strcmp(argv[1], "read")) {
 		return read_apply_mode(false) ? 0 : 1;
 	} else if (argc == 2 && !strcmp(argv[1], "apply")) {

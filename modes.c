@@ -12,7 +12,7 @@ bool read_apply_mode(bool write) {
 	config_t * config = load_config(NULL, &nl);
 	if (config) {
 		bool success = true;
-		int i;
+		unsigned int i;
 		success &= undervolt(config, &nl, write);
 		for (i = 0; i < ARRAY_SIZE(config->power); i++) {
 			success &= power_limit(config, i, &nl, write);
@@ -28,7 +28,7 @@ bool read_apply_mode(bool write) {
 
 static bool reload_config;
 
-static void sigusr1_handler(int sig) {
+static void sigusr1_handler(UNUSED int sig) {
 	reload_config = true;
 }
 
@@ -56,7 +56,7 @@ int daemon_mode() {
 				}
 			}
 
-			int i = 0;
+			unsigned int i = 0;
 			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
 				power_limit(config, i, NULL, true);
 			}

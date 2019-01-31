@@ -81,11 +81,11 @@ static void print_powercap_next(powercap_list_t * lst, int maxname, char * buf,
 			lst->time = tnow;
 			if (csv) {
 				CSV_SEPARATOR(nl, *nll);
-				printf("%.03f", lst->name, dval);
+				printf("%.03f", dval);
 			} else {
 				NEW_LINE(nl, *nll);
 				write_maxname(lst->name, maxname);
-				printf("%9.03f W\n", lst->name, dval);
+				printf("%9.03f W\n", dval);
 			}
 		}
 		close(fd);
@@ -114,7 +114,6 @@ static void print_hwmon_next(hwmon_list_t * lst, int maxname, char * buf,
 				CSV_SEPARATOR(nl, *nll);
 				printf("%.03f", dval);
 			} else {
-				int len = strlen(lst->name);
 				NEW_LINE(nl, *nll);
 				write_maxname(lst->name, maxname);
 				printf("%9.03f%s\n", dval, degstr);
@@ -162,7 +161,7 @@ static powercap_list_t * get_powercap(int * maxname) {
 		return NULL;
 	}
 	struct dirent * dirent;
-	while (dirent = readdir(dir)) {
+	while ((dirent = readdir(dir))) {
 		if (strstr(dirent->d_name, ":") && strlen(dirent->d_name) <= 30) {
 			sprintf(buf, DIR_POWERCAP "/%s/name", dirent->d_name);
 			int fd = open(buf, O_RDONLY);
@@ -202,7 +201,7 @@ static bool get_hwmon(const char * name, char * out) {
 		return NULL;
 	}
 	struct dirent * dirent;
-	while (dirent = readdir(dir)) {
+	while ((dirent = readdir(dir))) {
 		if (strlen(dirent->d_name) <= 30) {
 			sprintf(buf, DIR_HWMON "/%s/name", dirent->d_name);
 			int fd = open(buf, O_RDONLY);
@@ -280,7 +279,7 @@ static hwmon_list_t * get_coretemp(int * maxname) {
 
 static bool interrupted;
 
-static void sigint_handler(int sig) {
+static void sigint_handler(UNUSED int sig) {
 	interrupted = true;
 }
 
@@ -311,7 +310,7 @@ int measure_mode() {
 			char * outptr = degstr;
 			size_t insize = 3;
 			size_t outsize = sizeof(degstr);
-			int x = iconv(ic, &inptr, &insize, &outptr, &outsize);
+			iconv(ic, &inptr, &insize, &outptr, &outsize);
 			iconv_close(ic);
 		}
 	}
@@ -342,7 +341,7 @@ int measure_mode() {
 			double csv_diff = (csv_now.tv_sec - csv_start.tv_sec) +
 				(csv_now.tv_nsec - csv_start.tv_nsec) / 1000000000.;
 			bool nll = false;
-			CSV_SEPARATOR(&nl, nll);
+			CSV_SEPARATOR((bool *) &nl, nll);
 			printf("%.03f", csv_diff);
 		}
 		print_powercap_next(powercap_list, maxname, buf, &nl, NULL, csv);

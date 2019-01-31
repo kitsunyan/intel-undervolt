@@ -1,4 +1,6 @@
 CC=gcc
+CFLAGS=
+EXTRA_CFLAGS=-Wall -Wextra
 PKGCONFIG=pkg-config
 DESTDIR=
 
@@ -27,7 +29,7 @@ intel_undervolt_sources = \
 intel_undervolt_objects = $(intel_undervolt_sources:.c=.o)
 
 %.o: %.c $(intel_undervolt_headers)
-	$(CC) $(CFLAGS) \
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) \
 	-DSYSCONFDIR='"'$(SYSCONFDIR)'"' \
 	-o $@ -c $<
 
