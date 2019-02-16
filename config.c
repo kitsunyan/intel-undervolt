@@ -8,23 +8,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-void uv_list_foreach(uv_list_t * uv,
-	void (* callback)(uv_list_t *, void *), void * data) {
-	if (uv) {
-		uv_list_foreach(uv->next, callback, data);
-		callback(uv, data);
-	}
-}
-
-static void uv_list_free_item(uv_list_t * uv, UNUSED void * data) {
-	free(uv->title);
-	free(uv);
+static void undervolt_free(void * pointer) {
+	undervolt_t * undervolt = pointer;
+	free(undervolt->title);
 }
 
 void free_config(config_t * config) {
 	unsigned int i;
 	if (config) {
-		uv_list_foreach(config->uv, uv_list_free_item, NULL);
+		if (config->undervolts) {
+			array_free(config->undervolts);
+		}
 		if (config->fd_msr >= 0) {
 			close(config->fd_msr);
 		}
@@ -82,13 +76,18 @@ config_t * load_config(config_t * old_config, bool * nl) {
 	config_t * config;
 	if (old_config) {
 		config = old_config;
-		uv_list_foreach(config->uv, uv_list_free_item, NULL);
+		array_free(config->undervolts);
 	} else {
 		config = malloc(sizeof(config_t));
+		if (!config) {
+			NEW_LINE(nl, nll);
+			perror("No enough memory");
+			return NULL;
+		}
 		config->fd_msr = -1;
 		config->fd_mem = -1;
 	}
-	config->uv = NULL;
+	config->undervolts = NULL;
 	for (i = 0; i < ARRAY_SIZE(config->power); i++) {
 		config->power[i].apply = false;
 	}
@@ -127,6 +126,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		char * tmp = NULL;
 		bool apply_deprecation = false;
 		bool tdp_deprecation = false;
+		int status;
 
 		#define iuv_read_line() (getdelim(&line, &linen, '\0', file) >= 0)
 
@@ -136,6 +136,8 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			fprintf(stderr, __VA_ARGS__); \
 			break; \
 		}
+
+		#define iuv_print_break_nomem() iuv_print_break("No enough memory\n")
 
 		#define iuv_read_line_error_action(on_error) { \
 			if (!iuv_read_line()) { \
@@ -148,34 +150,52 @@ config_t * load_config(config_t * old_config, bool * nl) {
 
 		while (iuv_read_line()) {
 			if (!strcmp(line, "undervolt")) {
+				int index;
+				int len;
+				char * title;
+				float value;
+				undervolt_t * undervolt;
 				iuv_read_line_error();
 				tmp = NULL;
-				int index = (int) strtol(line, &tmp, 10);
+				index = (int) strtol(line, &tmp, 10);
 				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid index: %s\n", line);
 				}
 				iuv_read_line_error();
-				int len = strlen(line);
-				char * title = malloc(len + 1);
+				len = strlen(line);
+				title = malloc(len + 1);
+				if (!title) {
+					iuv_print_break_nomem();
+				}
 				memcpy(title, line, len + 1);
 				iuv_read_line_error_action({
 					free(title);
 				});
 				tmp = NULL;
-				float value = strtof(line, &tmp);
+				value = strtof(line, &tmp);
 				if (!line[0] || (tmp && tmp[0])) {
 					free(title);
 					iuv_print_break("Invalid value: %s\n", line);
 				}
-				uv_list_t * uv = malloc(sizeof(uv_list_t));
-				uv->next = config->uv;
-				uv->index = index;
-				uv->title = title;
-				uv->value = value;
-				config->uv = uv;
+				if (!config->undervolts) {
+					config->undervolts = array_new(sizeof(undervolt_t),
+						undervolt_free);
+					if (!config->undervolts) {
+						free(title);
+						iuv_print_break_nomem();
+					}
+				}
+				undervolt = array_add(config->undervolts);
+				if (!undervolt) {
+					free(title);
+					iuv_print_break_nomem();
+				}
+				undervolt->index = index;
+				undervolt->title = title;
+				undervolt->value = value;
 			} else if (!strcmp(line, "power")) {
-				iuv_read_line_error();
 				int index = -1;
+				iuv_read_line_error();
 				for (i = 0; i < ARRAY_SIZE(power_domains); i++) {
 					if (!strcmp(line, power_domains[i].name)) {
 						index = i;
@@ -197,18 +217,20 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				}
 				config->power[index].apply = true;
 			} else if (!strcmp(line, "tjoffset")) {
+				int tjoffset;
 				iuv_read_line_error();
 				tmp = NULL;
-				int tjoffset = (int) strtol(line, &tmp, 10);
+				tjoffset = (int) strtol(line, &tmp, 10);
 				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid tjoffset: %s\n", line);
 				}
 				config->tjoffset = tjoffset;
 				config->tjoffset_apply = true;
 			} else if (!strcmp(line, "interval")) {
+				int interval;
 				iuv_read_line_error();
 				tmp = NULL;
-				int interval = (int) strtol(line, &tmp, 10);
+				interval = (int) strtol(line, &tmp, 10);
 				if (!line[0] || (tmp && tmp[0])) {
 					iuv_print_break("Invalid interval: %s\n", line);
 				}
@@ -236,7 +258,6 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			free(line);
 		}
 		fclose(file);
-		int status;
 		waitpid(pid, &status, 0);
 		if (!error && (!WIFEXITED(status) || WEXITSTATUS(status) != 0)) {
 			NEW_LINE(nl, nll);
@@ -253,7 +274,8 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				}
 			}
 
-			if (config->uv || need_power_msr || config->tjoffset_apply) {
+			if (config->undervolts || need_power_msr ||
+				config->tjoffset_apply) {
 				if (config->fd_msr < 0) {
 #ifdef IS_FREEBSD
 					char * dev = "/dev/cpuctl0";
@@ -359,6 +381,10 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		if (error) {
 			free_config(config);
 			config = NULL;
+		} else {
+			if (config->undervolts) {
+				array_shrink(config->undervolts);
+			}
 		}
 	}
 

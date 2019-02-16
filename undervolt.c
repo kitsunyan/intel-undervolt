@@ -41,59 +41,46 @@ static inline bool cpuctl_wr(int fd, int a, uint64_t * t) {
 
 #endif
 
-typedef struct {
-	config_t * config;
-	bool write;
-	bool success;
-	bool * nl;
-	bool nll;
-} undervolt_ctx_t;
-
-static void undervolt_it(uv_list_t * uv, void * data) {
-	undervolt_ctx_t * ctx = data;
-
-	static int mask = 0x800;
-	uint64_t uvint = ((uint64_t) (mask - absf(uv->value) * 1.024f + 0.5f)
-		<< 21) & 0xffffffff;
-	uint64_t rdval = 0x8000001000000000 | ((uint64_t) uv->index << 40);
-	uint64_t wrval = rdval | 0x100000000 | uvint;
-
-	bool write_success = !ctx->write ||
-		wr(ctx->config, MSR_ADDR_VOLTAGE, wrval);
-	bool read_success = write_success &&
-		wr(ctx->config, MSR_ADDR_VOLTAGE, rdval) &&
-		rd(ctx->config, MSR_ADDR_VOLTAGE, rdval);
-
-	const char * errstr = NULL;
-	if (!write_success || !read_success) {
-		errstr = strerror(errno);
-	} else if (ctx->write && (rdval & 0xffffffff) != (wrval & 0xffffffff)) {
-		errstr = "Values do not equal";
-	}
-
-	NEW_LINE(ctx->nl, ctx->nll);
-	if (errstr) {
-		ctx->success = false;
-		printf("%s (%d): %s\n", uv->title, uv->index, errstr);
-	} else {
-		float val = ((mask - (rdval >> 21)) & (mask - 1)) / 1.024f;
-		printf("%s (%d): -%.02f mV\n", uv->title, uv->index, val);
-	}
-}
-
 bool undervolt(config_t * config, bool * nl, bool write) {
-	if (config->uv) {
-		undervolt_ctx_t ctx;
-		ctx.config = config;
-		ctx.write = write;
-		ctx.success = true;
-		ctx.nl = nl;
-		ctx.nll = false;
-		uv_list_foreach(config->uv, undervolt_it, &ctx);
-		return ctx.success;
-	} else {
-		return true;
+	bool success = true;
+	bool nll = false;
+	int i;
+
+	for (i = 0; config->undervolts && i < config->undervolts->count; i++) {
+		undervolt_t * undervolt = array_get(config->undervolts, i);
+
+		static const int mask = 0x800;
+		uint64_t uvint = ((uint64_t) (mask - absf(undervolt->value) * 1.024f +
+			0.5f) << 21) & 0xffffffff;
+		uint64_t rdval = 0x8000001000000000 |
+			((uint64_t) undervolt->index << 40);
+		uint64_t wrval = rdval | 0x100000000 | uvint;
+
+		bool write_success = !write ||
+			wr(config, MSR_ADDR_VOLTAGE, wrval);
+		bool read_success = write_success &&
+			wr(config, MSR_ADDR_VOLTAGE, rdval) &&
+			rd(config, MSR_ADDR_VOLTAGE, rdval);
+
+		const char * errstr = NULL;
+		if (!write_success || !read_success) {
+			errstr = strerror(errno);
+		} else if (write && (rdval & 0xffffffff) != (wrval & 0xffffffff)) {
+			errstr = "Values do not equal";
+		}
+
+		NEW_LINE(nl, nll);
+		if (errstr) {
+			success = false;
+			printf("%s (%d): %s\n", undervolt->title, undervolt->index, errstr);
+		} else {
+			float val = ((mask - (rdval >> 21)) & (mask - 1)) / 1.024f;
+			printf("%s (%d): -%.02f mV\n", undervolt->title,
+				undervolt->index, val);
+		}
 	}
+
+	return success;
 }
 
 static float power_to_seconds(int value, int time_unit) {

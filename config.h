@@ -6,19 +6,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef struct {
-	void * next;
-	int index;
-	char * title;
-	float value;
-} uv_list_t;
-
 #define MAP_SIZE 4096UL
 #define MAP_MASK (MAP_SIZE - 1)
 
 #define MSR_ADDR_TEMPERATURE 0x1a2
 #define MSR_ADDR_UNITS 0x606
 #define MSR_ADDR_VOLTAGE 0x150
+
+typedef struct {
+	int index;
+	char * title;
+	float value;
+} undervolt_t;
 
 typedef struct {
 	const char * name;
@@ -46,15 +45,12 @@ typedef struct {
 typedef struct {
 	int fd_msr;
 	int fd_mem;
-	uv_list_t * uv;
+	array_t * undervolts;
 	power_limit_t power[ARRAY_SIZE(power_domains)];
 	bool tjoffset_apply;
 	float tjoffset;
 	int interval;
 } config_t;
-
-void uv_list_foreach(uv_list_t * uv,
-	void (* callback)(uv_list_t *, void *), void * data);
 
 void free_config(config_t * config);
 config_t * load_config(config_t * old_config, bool * nl);
