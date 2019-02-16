@@ -4,14 +4,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef __GNUC__
+#if defined(__GNUC__)
 #define UNUSED __attribute__((unused))
 #else
 #define UNUSED
 #endif
 
-#ifdef __GNUC__
-#pragma GCC diagnostic ignored "-Wformat-overflow"
+#if defined(__GNUC__) && __GNUC__ >= 7
+#define BEGIN_IGNORE_FORMAT_OVERFLOW \
+_Pragma("GCC diagnostic push") \
+_Pragma("GCC diagnostic ignored \"-Wformat-overflow\"")
+#define END_IGNORE_FORMAT_OVERFLOW \
+_Pragma("GCC diagnostic pop")
+#else
+#define BEGIN_IGNORE_FORMAT_OVERFLOW
+#define END_IGNORE_FORMAT_OVERFLOW
 #endif
 
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
@@ -37,5 +44,15 @@
 #define CSV_SEPARATOR(global, local) GLOBAL_LOCAL_SEPARATOR(global, local, ";", true)
 
 bool safe_rw(uint64_t * addr, uint64_t * data, bool write);
+
+typedef struct {
+	int count;
+} array_t;
+
+array_t * array_new(int item_size, void (* item_free)(void *));
+void * array_get(array_t * array, int index);
+void * array_add(array_t * array);
+bool array_shrink(array_t * array);
+void array_free(array_t * array);
 
 #endif

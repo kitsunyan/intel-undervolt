@@ -1,4 +1,5 @@
 #include "measure.h"
+#include "power.h"
 #include "util.h"
 
 #include <dirent.h>
@@ -15,17 +16,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DIR_POWERCAP "/sys/class/powercap"
 #define DIR_HWMON "/sys/class/hwmon"
 #define BUFSZ 80
-
-typedef struct {
-	void * next;
-	char * name;
-	char * dir;
-	int64_t last;
-	struct timespec time;
-} powercap_list_t;
 
 typedef struct {
 	void * next;
@@ -36,59 +28,30 @@ typedef struct {
 
 static void write_maxname(const char * name, int maxname) {
 	int len = strlen(name);
-	write(0, name, len);
-	write(0, ":", 1);
 	int i;
+	printf("%s:", name);
 	for (i = len - 1; i < maxname; i++) {
-		write(0, " ", 1);
+		printf(" ");
 	}
 }
 
-static void print_powercap_next(powercap_list_t * lst, int maxname, char * buf,
-	bool * nl, bool * nll, bool csv) {
-	if (!lst) {
-		return;
-	}
-	bool nlla = false;
-	if (!nll) {
-		nll = &nlla;
-	}
-	print_powercap_next(lst->next, maxname, buf, nl, nll, csv);
+static void print_rapl(rapl_t * rapl, int maxname, bool * nl, bool csv) {
+	bool nll = false;
+	int i;
 
-	sprintf(buf, DIR_POWERCAP "/%s/energy_uj", lst->dir);
-	int fd = open(buf, O_RDONLY);
-	if (fd >= 0) {
-		int count = read(fd, buf, BUFSZ - 1);
-		if (count > 0) {
-			buf[buf[count - 1] == '\n' ? count - 1 : count] = '\0';
-			int64_t val = (int64_t) atoll(buf);
-			struct timespec tnow;
-			clock_gettime(CLOCK_MONOTONIC, &tnow);
-			double dval = 0;
-			if (lst->last > 0) {
-				struct timespec tdiff;
-				tdiff.tv_sec = tnow.tv_sec - lst->time.tv_sec;
-				tdiff.tv_nsec = tnow.tv_nsec - lst->time.tv_nsec;
-				while (tdiff.tv_nsec < 0) {
-					tdiff.tv_nsec += 1000000000;
-					tdiff.tv_sec--;
-				}
-				int64_t diff = (int64_t) (tdiff.tv_sec * 1000000000 +
-					tdiff.tv_nsec);
-				dval = (double) (val - lst->last) * 1000 / diff;
-			}
-			lst->last = val;
-			lst->time = tnow;
+	rapl_measure(rapl);
+	if (rapl) {
+		for (i = 0; i < rapl->devices->count; i++) {
+			rapl_device_t * device = array_get(rapl->devices, i);
 			if (csv) {
-				CSV_SEPARATOR(nl, *nll);
-				printf("%.03f", dval);
+				CSV_SEPARATOR(nl, nll);
+				printf("%.03f", device->power);
 			} else {
-				NEW_LINE(nl, *nll);
-				write_maxname(lst->name, maxname);
-				printf("%9.03f W\n", dval);
+				NEW_LINE(nl, nll);
+				write_maxname(device->name, maxname);
+				printf("%9.03f W\n", device->power);
 			}
 		}
-		close(fd);
 	}
 }
 
@@ -151,47 +114,6 @@ static void print_cpufreq(int maxname, char * buf, bool * nl, bool csv) {
 	}
 }
 
-static powercap_list_t * get_powercap(int * maxname) {
-	char buf[BUFSZ];
-	powercap_list_t * lst = NULL;
-
-	DIR * dir = opendir(DIR_POWERCAP);
-	if (dir == NULL) {
-		fprintf(stderr, "Failed to open powercap directory\n");
-		return NULL;
-	}
-	struct dirent * dirent;
-	while ((dirent = readdir(dir))) {
-		if (strstr(dirent->d_name, ":") && strlen(dirent->d_name) <= 30) {
-			sprintf(buf, DIR_POWERCAP "/%s/name", dirent->d_name);
-			int fd = open(buf, O_RDONLY);
-			if (fd >= 0) {
-				int count = read(fd, buf, BUFSZ - 1);
-				if (count > 1) {
-					int nlen = buf[count - 1] == '\n' ? count - 2 : count - 1;
-					buf[nlen + 1] = '\0';
-					powercap_list_t * nlst = malloc(sizeof(powercap_list_t));
-					nlst->next = lst;
-					lst = nlst;
-					nlst->name = malloc(nlen + 1);
-					memcpy(nlst->name, buf, nlen + 1);
-					int dlen = strlen(dirent->d_name);
-					nlst->dir = malloc(dlen + 1);
-					memcpy(nlst->dir, dirent->d_name, dlen + 1);
-					nlst->last = 0;
-					if (maxname) {
-						*maxname = nlen > *maxname ? nlen : *maxname;
-					}
-				}
-				close(fd);
-			}
-		}
-	}
-	closedir(dir);
-
-	return lst;
-}
-
 static bool get_hwmon(const char * name, char * out) {
 	char buf[BUFSZ];
 
@@ -203,7 +125,9 @@ static bool get_hwmon(const char * name, char * out) {
 	struct dirent * dirent;
 	while ((dirent = readdir(dir))) {
 		if (strlen(dirent->d_name) <= 30) {
+BEGIN_IGNORE_FORMAT_OVERFLOW
 			sprintf(buf, DIR_HWMON "/%s/name", dirent->d_name);
+END_IGNORE_FORMAT_OVERFLOW
 			int fd = open(buf, O_RDONLY);
 			if (fd >= 0) {
 				int count = read(fd, buf, BUFSZ - 1);
@@ -238,12 +162,16 @@ static hwmon_list_t * get_coretemp(int * maxname) {
 
 	int i;
 	for (i = 1;; i++) {
+BEGIN_IGNORE_FORMAT_OVERFLOW
 		sprintf(buf, DIR_HWMON "/%s/temp%d_input", hdir, i);
+END_IGNORE_FORMAT_OVERFLOW
 		int fd = open(buf, O_RDONLY);
 		if (fd < 0) {
 			break;
 		}
+BEGIN_IGNORE_FORMAT_OVERFLOW
 		sprintf(buf, DIR_HWMON "/%s/temp%d_label", hdir, i);
+END_IGNORE_FORMAT_OVERFLOW
 		fd = open(buf, O_RDONLY);
 		char * name = NULL;
 		if (fd >= 0) {
@@ -286,9 +214,19 @@ static void sigint_handler(UNUSED int sig) {
 int measure_mode() {
 	char buf[BUFSZ];
 	int maxname = 0;
-	powercap_list_t * powercap_list = get_powercap(&maxname);
+	rapl_t * rapl = rapl_init();
 	hwmon_list_t * coretemp_list = get_coretemp(&maxname);
 	char degstr[5] = " C";
+	bool tty = isatty(1);
+
+	if (rapl) {
+		int i;
+		for (i = 0; i < rapl->devices->count; i++) {
+			rapl_device_t * device = array_get(rapl->devices, i);
+			int length = strlen(device->name);
+			maxname = length > maxname ? length : maxname;
+		}
+	}
 
 	char * format_env = getenv("FORMAT");
 	bool csv = format_env != NULL && !strcmp(format_env, "csv");
@@ -324,17 +262,21 @@ int measure_mode() {
 	struct timespec csv_start;
 	if (csv) {
 		clock_gettime(CLOCK_MONOTONIC, &csv_start);
-	} else {
+	} else if (tty) {
 		/* clear the screen */
-		printf("\033[H\033[J");
+		printf("\x1b[H\x1b[J");
+		/* hide the cursor */
+		printf("\x1b[?25l");
 	}
+	bool nl = false;
 	while (!interrupted) {
-		if (!csv) {
+		if (!csv && tty) {
 			/* move the cursor */
-			printf("\033[H");
-			fflush(0);
+			printf("\x1b[H");
 		}
-		bool nl = false;
+		if (tty) {
+			nl = false;
+		}
 		if (csv) {
 			struct timespec csv_now;
 			clock_gettime(CLOCK_MONOTONIC, &csv_now);
@@ -344,23 +286,24 @@ int measure_mode() {
 			CSV_SEPARATOR((bool *) &nl, nll);
 			printf("%.03f", csv_diff);
 		}
-		print_powercap_next(powercap_list, maxname, buf, &nl, NULL, csv);
+		print_rapl(rapl, maxname, &nl, csv);
 		print_hwmon_next(coretemp_list, maxname, buf, degstr, &nl, NULL, csv);
 		print_cpufreq(maxname, buf, &nl, csv);
 		if (csv) {
 			printf("\n");
 		}
+		fflush(stdout);
 		if (!interrupted) {
 			nanosleep(&sleep, NULL);
 		}
 	}
+	if (!csv && tty) {
+		/* show the cursor */
+		printf("\x1b[?25h");
+	}
 
-	while (powercap_list) {
-		powercap_list_t * next = powercap_list->next;
-		free(powercap_list->name);
-		free(powercap_list->dir);
-		free(powercap_list);
-		powercap_list = next;
+	if (rapl) {
+		rapl_free(rapl);
 	}
 	while (coretemp_list) {
 		hwmon_list_t * next = coretemp_list->next;

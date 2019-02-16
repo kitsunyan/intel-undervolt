@@ -15,6 +15,7 @@ intel_undervolt_headers = \
 	config.h \
 	measure.h \
 	modes.h \
+	power.h \
 	undervolt.h \
 	util.h
 
@@ -23,6 +24,7 @@ intel_undervolt_sources = \
 	measure.c \
 	main.c \
 	modes.c \
+	power.c \
 	undervolt.c \
 	util.c
 
