@@ -13,11 +13,28 @@ static void undervolt_free(void * pointer) {
 	free(undervolt->title);
 }
 
+static void hwp_power_term_free(void * pointer) {
+	hwp_power_term_t * hwp_power_term = pointer;
+	free(hwp_power_term->domain);
+}
+
+static void hwp_hint_free(void * pointer) {
+	hwp_hint_t * hwp_hint = pointer;
+	if (hwp_hint->hwp_power_terms) {
+		array_free(hwp_hint->hwp_power_terms);
+	}
+	free(hwp_hint->load_hint);
+	free(hwp_hint->normal_hint);
+}
+
 void free_config(config_t * config) {
-	unsigned int i;
 	if (config) {
+		unsigned int i;
 		if (config->undervolts) {
 			array_free(config->undervolts);
+		}
+		if (config->hwp_hints) {
+			array_free(config->hwp_hints);
 		}
 		if (config->fd_msr >= 0) {
 			close(config->fd_msr);
@@ -52,9 +69,9 @@ static bool parse_power_limit_value(const char * line,
 		tmp = &tmp[1];
 		next = strstr(tmp, ":");
 		n = next ? (int) (next - tmp) : (int) strlen(tmp);
-		if (!strncmp("enabled", tmp, n)) {
+		if (strn_eq_const(tmp, "enabled", n)) {
 			enabled = true;
-		} else if (!strncmp("disabled", tmp, n)) {
+		} else if (strn_eq_const(tmp, "disabled", n)) {
 			enabled = false;
 		} else {
 			return false;
@@ -70,6 +87,218 @@ static bool parse_power_limit_value(const char * line,
 	return true;
 }
 
+static bool parse_hwp_load(const char * line, bool * multi, float * threshold,
+	bool * nl, bool * nll) {
+	int args = 0;
+	bool error = false;
+	bool result_multi;
+	float result_threshold;
+
+	while (line) {
+		int len;
+		char * tmp = strstr(line, ":");
+		if (tmp) {
+			len = (int) (tmp - line);
+		} else {
+			len = strlen(line);
+		}
+
+		if (args == 0) {
+			if (strn_eq_const(line, "single", len)) {
+				result_multi = false;
+			} else if (strn_eq_const(line, "multi", len)) {
+				result_multi = true;
+			} else {
+				NEW_LINE(nl, *nll);
+				fprintf(stderr, "Invalid capture: %.*s\n", len, line);
+				error = true;
+				break;
+			}
+		} else if (args == 1) {
+			result_threshold = strtof(line, &tmp);
+			if (tmp) {
+				int tmp_len = (int) (tmp - line);
+				if (tmp_len != len) {
+					NEW_LINE(nl, *nll);
+					fprintf(stderr, "Invalid threshold: %.*s\n", len, line);
+					error = true;
+					break;
+				}
+			}
+		}
+
+		line = line[len] == ':' ? &line[len + 1] : NULL;
+		args++;
+	}
+
+	if (!error && args != 2) {
+		NEW_LINE(nl, *nll);
+		fprintf(stderr, "Wrong number of arguments for 'load' algorithm\n");
+		error = true;
+	}
+
+	if (error) {
+		return false;
+	} else {
+		*multi = result_multi;
+		*threshold = result_threshold;
+		return true;
+	}
+}
+
+static bool parse_hwp_power(const char * line, array_t ** hwp_power_terms,
+	bool * nl, bool * nll) {
+	int args = 1;
+	bool error = false;
+	bool and = false;
+	char * domain = NULL;
+	bool greater;
+	float power;
+	array_t * result = NULL;
+
+	while (line) {
+		int len;
+		char * tmp = strstr(line, ":");
+		if (tmp) {
+			len = (int) (tmp - line);
+		} else {
+			len = strlen(line);
+		}
+
+		if (args % 4 == 0) {
+			if (strn_eq_const(line, "and", len)) {
+				and = true;
+			} else if (strn_eq_const(line, "or", len)) {
+				and = false;
+			} else {
+				NEW_LINE(nl, *nll);
+				fprintf(stderr, "Invalid operator: %.*s\n", len, line);
+				error = true;
+				break;
+			}
+		} else if (args % 4 == 1) {
+			domain = malloc(len + 1);
+			if (!domain) {
+				NEW_LINE(nl, *nll);
+				fprintf(stderr, "No enough memory\n");
+				error = true;
+				break;
+			}
+			memcpy(domain, line, len);
+			domain[len] = '\0';
+		} else if (args % 4 == 2) {
+			if (strn_eq_const(line, "gt", len)) {
+				greater = true;
+			} else if (strn_eq_const(line, "lt", len)) {
+				greater = false;
+			} else {
+				NEW_LINE(nl, *nll);
+				fprintf(stderr, "Invalid operator: %.*s\n", len, line);
+				error = true;
+				break;
+			}
+		} else if (args % 4 == 3) {
+			hwp_power_term_t * hwp_power_term;
+			power = strtof(line, &tmp);
+			if (tmp) {
+				int tmp_len = (int) (tmp - line);
+				if (tmp_len != len) {
+					NEW_LINE(nl, *nll);
+					fprintf(stderr, "Invalid power: %.*s\n", len, line);
+					error = true;
+					break;
+				}
+			}
+			if (!result) {
+				result = array_new(sizeof(hwp_power_term_t),
+					hwp_power_term_free);
+			}
+			hwp_power_term = result ? array_add(result) : NULL;
+			if (!hwp_power_term) {
+				NEW_LINE(nl, *nll);
+				fprintf(stderr, "No enough memory\n");
+				error = true;
+				break;
+			}
+			hwp_power_term->and = and;
+			hwp_power_term->domain = domain;
+			hwp_power_term->greater = greater;
+			hwp_power_term->power = power;
+			domain = NULL;
+		}
+
+		line = line[len] == ':' ? &line[len + 1] : NULL;
+		args++;
+	}
+
+	if (!error && args % 4 != 0) {
+		NEW_LINE(nl, *nll);
+		fprintf(stderr, "Wrong number of arguments for 'power' algorithm\n");
+		error = true;
+	}
+
+	if (error) {
+		if (domain) {
+			free(domain);
+		}
+		if (result) {
+			array_free(result);
+		}
+		return false;
+	} else {
+		if (result) {
+			array_shrink(result);
+		}
+		*hwp_power_terms = result;
+		return true;
+	}
+}
+
+static bool contains_hint_or_append(const char ** hints, int count,
+	const char * hint) {
+	int i;
+	for (i = 0; i < count; i++) {
+		if (!strcmp(hints[i], hint)) {
+			return true;
+		}
+	}
+	hints[i] = hint;
+	return false;
+}
+
+static bool validate_hwp_hint(array_t * hwp_hints, bool * nl, bool * nll) {
+	int i;
+	int force_count = 0;
+	const char * hints[2 * hwp_hints->count];
+
+	for (i = 0; i < hwp_hints->count; i++) {
+		hwp_hint_t * hwp_hint = array_get(hwp_hints, i);
+		if (contains_hint_or_append(hints, 2 * i, hwp_hint->load_hint) ||
+			contains_hint_or_append(hints, 2 * i + 1, hwp_hint->normal_hint)) {
+			NEW_LINE(nl, *nll);
+			fprintf(stderr, "Same HWP hint can not be used multiple times\n");
+			return false;
+		}
+		if (hwp_hint->force) {
+			force_count++;
+		}
+	}
+
+	if (force_count > 1) {
+		NEW_LINE(nl, *nll);
+		fprintf(stderr, "Only single 'force' rule is allowed\n");
+		return false;
+	}
+	if (force_count == 1 && hwp_hints->count > 1) {
+		NEW_LINE(nl, *nll);
+		fprintf(stderr, "'switch' rules are not allowed when 'force' "
+			"rule is used\n");
+		return false;
+	}
+
+	return true;
+}
+
 config_t * load_config(config_t * old_config, bool * nl) {
 	unsigned int i;
 	bool nll = false;
@@ -77,6 +306,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 	if (old_config) {
 		config = old_config;
 		array_free(config->undervolts);
+		array_free(config->hwp_hints);
 	} else {
 		config = malloc(sizeof(config_t));
 		if (!config) {
@@ -92,6 +322,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		config->power[i].apply = false;
 	}
 	config->tjoffset_apply = false;
+	config->hwp_hints = NULL;
 	config->interval = -1;
 
 	int fd[2];
@@ -113,6 +344,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			"function tdp { pz tdp; pz power package \"$1\" \"$2\"; };"
 			"function power { pz power \"$1\" \"$2\" \"$3\"; };"
 			"function tjoffset { pz tjoffset \"$1\"; };"
+			"function hwphint { pz hwphint \"$1\" \"$2\" \"$3\" \"$4\"; };"
 			"function interval { pz interval \"$1\"; };"
 			"source " SYSCONFDIR "/intel-undervolt.conf",
 			"bash", fdarg, NULL);
@@ -235,6 +467,86 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					iuv_print_break("Invalid interval: %s\n", line);
 				}
 				config->interval = interval;
+			} else if (!strcmp(line, "hwphint")) {
+				bool force = false;
+				int len;
+				bool load = false;
+				bool load_multi;
+				float load_threshold;
+				bool power = false;
+				array_t * hwp_power_terms = NULL;
+				char * load_hint;
+				char * normal_hint;
+				hwp_hint_t * hwp_hint;
+				iuv_read_line_error();
+				if (!strcmp(line, "force")) {
+					force = true;
+				} else if (strcmp(line, "switch")) {
+					iuv_print_break("Invalid mode: %s\n", line);
+				}
+				iuv_read_line_error();
+				tmp = strstr(line, ":");
+				if (tmp) {
+					len = (int) (tmp - line);
+					line[len] = '\0';
+					tmp = &line[len + 1];
+				}
+				if (!strcmp(line, "load")) {
+					load = true;
+					if (!parse_hwp_load(tmp, &load_multi, &load_threshold,
+						nl, &nll)) {
+						error = true;
+						break;
+					}
+				} else if (!strcmp(line, "power")) {
+					power = true;
+					if (!parse_hwp_power(tmp, &hwp_power_terms, nl, &nll)) {
+						error = true;
+						break;
+					}
+				} else {
+					iuv_print_break("Invalid algorithm: %s\n", line);
+				}
+				iuv_read_line_error();
+				len = strlen(line);
+				load_hint = malloc(len + 1);
+				if (!load_hint) {
+					iuv_print_break_nomem();
+				}
+				memcpy(load_hint, line, len + 1);
+				iuv_read_line_error_action({
+					free(load_hint);
+				});
+				len = strlen(line);
+				normal_hint = malloc(len + 1);
+				if (!normal_hint) {
+					free(load_hint);
+					iuv_print_break_nomem();
+				}
+				memcpy(normal_hint, line, len + 1);
+				if (!config->hwp_hints) {
+					config->hwp_hints = array_new(sizeof(hwp_hint_t),
+						hwp_hint_free);
+					if (!config->hwp_hints) {
+						free(load_hint);
+						free(normal_hint);
+						iuv_print_break_nomem();
+					}
+				}
+				hwp_hint = array_add(config->hwp_hints);
+				if (!hwp_hint) {
+					free(load_hint);
+					free(normal_hint);
+					iuv_print_break_nomem();
+				}
+				hwp_hint->force = force;
+				hwp_hint->load = load;
+				hwp_hint->load_multi = load_multi;
+				hwp_hint->load_threshold = load_threshold;
+				hwp_hint->power = power;
+				hwp_hint->hwp_power_terms = hwp_power_terms;
+				hwp_hint->load_hint = load_hint;
+				hwp_hint->normal_hint = normal_hint;
 			} else if (!strcmp(line, "apply")) {
 				if (!apply_deprecation) {
 					NEW_LINE(nl, nll);
@@ -262,6 +574,11 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		if (!error && (!WIFEXITED(status) || WEXITSTATUS(status) != 0)) {
 			NEW_LINE(nl, nll);
 			fprintf(stderr, "Failed to read configuration\n");
+			error = true;
+		}
+
+		if (!error && config->hwp_hints &&
+			!validate_hwp_hint(config->hwp_hints, nl, &nll)) {
 			error = true;
 		}
 
@@ -384,6 +701,9 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		} else {
 			if (config->undervolts) {
 				array_shrink(config->undervolts);
+			}
+			if (config->hwp_hints) {
+				array_shrink(config->hwp_hints);
 			}
 		}
 	}

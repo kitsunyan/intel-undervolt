@@ -3,9 +3,6 @@
 
 #include "util.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-
 #define MAP_SIZE 4096UL
 #define MAP_MASK (MAP_SIZE - 1)
 
@@ -43,12 +40,31 @@ typedef struct {
 } power_limit_t;
 
 typedef struct {
+	bool and;
+	char * domain;
+	bool greater;
+	double power;
+} hwp_power_term_t;
+
+typedef struct {
+	bool force;
+	bool load;
+	bool load_multi;
+	float load_threshold;
+	bool power;
+	array_t * hwp_power_terms;
+	char * load_hint;
+	char * normal_hint;
+} hwp_hint_t;
+
+typedef struct {
 	int fd_msr;
 	int fd_mem;
 	array_t * undervolts;
 	power_limit_t power[ARRAY_SIZE(power_domains)];
 	bool tjoffset_apply;
 	float tjoffset;
+	array_t * hwp_hints;
 	int interval;
 } config_t;
 

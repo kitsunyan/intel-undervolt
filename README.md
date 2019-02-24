@@ -41,6 +41,36 @@ from max temperature level. For example, `tjoffset -20`. If max temperature is e
 resulting limit will be set to `100 - 20 = 80°C`. Note that offsets higher than 15°C are allowed
 only on Skylake and newer.
 
+### Energy Versus Performance Preference Switch
+
+Energy versus performance preference is a hint for hardware-managed P-states (HWP) which is used for
+performance scaling.
+
+For instance, with `performance` hint my i7-8650U is able to run at 4.2 GHz, and overall CPU
+performance appears to be higher, but the clock speed is always locked to 4.2 GHz unless multiple
+cores are loaded or CPU is throttled. With `balance_performance` hint, CPU increases the clock speed
+only under load but never goes higher than 3.9 GHz, but performance of integrated GPU is
+significantly better at the same time.
+
+intel-undevolt is able to change HWP hint depending on the load, which allows to achive either
+better performance or better battery life. This feature is available in daemon mode only which will
+be described below. The following syntax is used to configure HWP hint:
+`hwphint ${mode} ${algorithm} ${load_hint} ${normal_hint}`.
+
+For instance, if I want to get high CPU and GPU performance from AC, I need to set `performance`
+hint when CPU is under load but GPU isn't (`performance` hint reduces GPU performance in my case).
+Hint switching can be configured depending on power consumption of `core` and `uncore`:
+`hwphint switch power:core:gt:8:and:uncore:lt:3 performance balance_performance`. `intel_rapl`
+module is required to measure power consumption.
+
+To get a better battery life, clock speed can be reduced until CPU is under continuous high load,
+which will hold the lowest CPU speed most of the time. Hint switching can be configured depending on
+the CPU load: `hwphint switch load:single:0.90 balance_power power`.
+
+Multiple `hwphint switch` rules can be used, the hint will be selected depending on current hint,
+which can be configured by another tool (e.g. tlp). You can use `hwphint force` rule to set the hint
+independently, but only one rule can be declared in this case.
+
 ## Usage
 
 ### Applying Configuration
@@ -56,6 +86,7 @@ display power consumption in interactive mode.
 ### Daemon Mode
 
 Sometimes power and temperature limits could be reset by EC, BIOS, or something else. This behavior
-can be suppressed applying limits periodically. `intel-undervolt-loop.service` allows you to run
-the program in daemon mode which will apply limits with the specified interval. You can change the
-interval using `interval ${interval_in_milliseconds}` configuration paremeter.
+can be suppressed applying limits periodically. Some features like energy vesus performance
+preference switch work in daemon mode only. Use `intel-undervolt daemon` to run intel-undervolt in
+daemon mode, or use `intel-undervolt-loop.service`. You can change the interval using
+`interval ${interval_in_milliseconds}` configuration parameter.

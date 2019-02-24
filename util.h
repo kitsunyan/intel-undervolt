@@ -2,6 +2,7 @@
 #define __UTIL_H__
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #if defined(__GNUC__)
@@ -42,6 +43,8 @@ _Pragma("GCC diagnostic pop")
 
 #define NEW_LINE(global, local) GLOBAL_LOCAL_SEPARATOR(global, local, "\n", false)
 #define CSV_SEPARATOR(global, local) GLOBAL_LOCAL_SEPARATOR(global, local, ";", true)
+
+bool strn_eq_const(const char * str, const char * cstr, size_t n);
 
 bool safe_rw(uint64_t * addr, uint64_t * data, bool write);
 

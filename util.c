@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool strn_eq_const(const char * str, const char * cstr, size_t n) {
+	return n >= strlen(cstr) && !strncmp(str, cstr, n);
+}
+
 static jmp_buf sigsegv_handler_jmp_buf;
 
 static void sigsegv_handler(UNUSED int sig) {
