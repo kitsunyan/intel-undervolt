@@ -40,6 +40,7 @@ int daemon_mode() {
 	config_t * config = load_config(NULL, NULL);
 	struct sigaction act;
 	unsigned int i = 0;
+	bool nl = false;
 	cpu_policy_t * cpu_policy = NULL;
 
 	if (config && config->interval <= 0) {
@@ -53,6 +54,11 @@ int daemon_mode() {
 		act.sa_handler = sigusr1_handler;
 		sigaction(SIGUSR1, &act, NULL);
 
+		if (!undervolt(config, &nl, true)) {
+			printf("failed to undervolt, aborting\n");
+			free_config(config);
+			return false;
+		}
 		reload_config = false;
 		while (true) {
 			if (reload_config) {
