@@ -337,7 +337,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		close(fd[0]);
 		char fdarg[20];
 		sprintf(fdarg, "%d", fd[1]);
-		execlp("/bin/bash", "/bin/bash", "-c", "readonly fd=$1;"
+		execlp("/bin/sh", "/bin/sh", "-c", "readonly fd=$1;"
 			"function pz { printf '%s\\0' \"$@\" >&$fd; };"
 			"function apply { pz apply; pz undervolt \"$1\" \"$2\" \"$3\"; };"
 			"function undervolt { pz undervolt \"$1\" \"$2\" \"$3\"; };"
@@ -347,7 +347,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			"function hwphint { pz hwphint \"$1\" \"$2\" \"$3\" \"$4\"; };"
 			"function interval { pz interval \"$1\"; };"
 			"source " SYSCONFDIR "/intel-undervolt.conf",
-			"bash", fdarg, NULL);
+			"sh", fdarg, NULL);
 		exit(1);
 	} else {
 		close(fd[1]);
