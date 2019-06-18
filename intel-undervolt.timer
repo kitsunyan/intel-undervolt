@@ -1,0 +1,9 @@
+[Unit]
+Description=Intel Undervolt Timer
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=30
+
+[Install]
+WantedBy=multi-user.target
