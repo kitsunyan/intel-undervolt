@@ -1,30 +1,45 @@
-CC=gcc
-CFLAGS=
-EXTRA_CFLAGS=-Wall -Wextra
-DESTDIR=
+CC = gcc
+CFLAGS =
+EXTRA_CFLAGS = -Wall -Wextra
+DESTDIR =
 
-ENABLE_SYSTEMD=
-ENABLE_ELOGIND=
+ENABLE_SYSTEMD =
+ENABLE_ELOGIND =
+ENABLE_OPENRC =
 
-BINDIR=
-SYSCONFDIR=
-UNITDIR=
-ELOGINDDIR=
+BINDIR =
+SYSCONFDIR =
+RUNSTATEDIR =
+UNITDIR =
+ELOGINDDIR =
 
 TARGETS = intel-undervolt
-
 ifeq ($(ENABLE_SYSTEMD), 1)
 TARGETS += intel-undervolt.service intel-undervolt-loop.service
+endif
+ifeq ($(ENABLE_OPENRC), 1)
+TARGETS += intel-undervolt-loop.openrc
 endif
 
 all: $(TARGETS)
 
 ifeq ($(ENABLE_SYSTEMD), 1)
+
 intel-undervolt.service: intel-undervolt.service.in
 	sed -e "s,%BINDIR%,$(BINDIR)," $< > $@
 
 intel-undervolt-loop.service: intel-undervolt-loop.service.in
 	sed -e "s,%BINDIR%,$(BINDIR)," $< > $@
+
+endif
+
+ifeq ($(ENABLE_OPENRC), 1)
+
+intel-undervolt-loop.openrc: intel-undervolt-loop.openrc.in
+	sed -e "s,%BINDIR%,$(BINDIR)," \
+	-e "s,%SYSCONFDIR%,$(SYSCONFDIR)," \
+	-e "s,%RUNSTATEDIR%,$(RUNSTATEDIR)," $< > $@
+
 endif
 
 intel_undervolt_headers = \
@@ -73,10 +88,15 @@ ifeq ($(ENABLE_ELOGIND), 1)
 	install -Dm755 'intel-undervolt.elogind' \
 	"$(DESTDIR)$(ELOGINDDIR)/system-sleep/50-intel-undervolt"
 endif
+ifeq ($(ENABLE_OPENRC), 1)
+	install -Dm755 'intel-undervolt-loop.openrc' \
+	"$(DESTDIR)$(SYSCONFDIR)/init.d/intel-undervolt-loop"
+endif
 
 clean:
 	rm -fv \
 	$(intel_undervolt_objects) \
 	intel-undervolt \
 	intel-undervolt.service \
-	intel-undervolt-loop.service
+	intel-undervolt-loop.service \
+	intel-undervolt-loop.openrc

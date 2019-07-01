@@ -29,9 +29,11 @@ enable() {
 pkgconfig="`arg pkgconfig pkg-config "$@"`"
 bindir="`arg bindir /usr/bin "$@"`"
 sysconfdir="`arg sysconfdir /etc "$@"`"
+runstatedir="`arg runstatedir /run "$@"`"
 
 enable_systemd="`enable systemd false "$@"`"
 enable_elogind="`enable elogind false "$@"`"
+enable_openrc="`enable openrc false "$@"`"
 
 unitdir="`arg unitdir '' "$@"`"
 [ -z "$unitdir" ] && unitdir="`"$pkgconfig" systemd --variable=systemdsystemunitdir`"
@@ -47,27 +49,34 @@ eloginddir="`arg eloginddir '' "$@"`"
 sedcond() {
   local v
   "$2" && v=1
-  printf '%s' "s,^\(ENABLE_$1=\).*$,\1$v,"
+  printf '%s' "s,^\(ENABLE_$1 =\).*$,\1 $v,"
 }
 
 sedarg() {
-  printf '%s' "s,^\($1=\).*$,\1$2,"
+  printf '%s' "s,^\($1 =\).*$,\1 $2,"
 }
 
 sed Makefile.in \
 -e "`sedcond SYSTEMD "$enable_systemd"`" \
 -e "`sedcond ELOGIND "$enable_elogind"`" \
+-e "`sedcond OPENRC "$enable_openrc"`" \
 -e "`sedarg BINDIR "$bindir"`" \
 -e "`sedarg SYSCONFDIR "$sysconfdir"`" \
+-e "`sedarg RUNSTATEDIR "$runstatedir"`" \
 -e "`sedarg UNITDIR "$unitdir"`" \
 -e "`sedarg ELOGINDDIR "$eloginddir"`" \
 > Makefile || exit 1
 
 echo "Enable systemd: $enable_systemd"
 echo "Enable elogind: $enable_elogind"
+echo "Enable OpenRC: $enable_openrc"
 echo
 echo "bindir: $bindir"
 echo "sysconfdir: $sysconfdir"
-"$enable_systemd" && echo "unitdir: $unitdir"
-"$enable_elogind" && echo "eloginddir: $eloginddir"
+"$enable_openrc" &&
+echo "runstatedir: $runstatedir"
+"$enable_systemd" &&
+echo "unitdir: $unitdir"
+"$enable_elogind" &&
+echo "eloginddir: $eloginddir"
 echo

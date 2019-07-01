@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+
+extra_started_commands='reload'
+description='Intel Undervolt Loop Service'
+
+command='%BINDIR%/intel-undervolt'
+command_args='daemon'
+command_background='true'
+pidfile="%RUNSTATEDIR%/${RC_SVCNAME}.pid"
+required_files='%SYSCONFDIR%/intel-undervolt.conf'
+
+reload() {
+  start-stop-daemon -s USR1 --pidfile "${pidfile}"
+}
