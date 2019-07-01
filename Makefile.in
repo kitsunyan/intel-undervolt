@@ -1,0 +1,82 @@
+CC=gcc
+CFLAGS=
+EXTRA_CFLAGS=-Wall -Wextra
+DESTDIR=
+
+ENABLE_SYSTEMD=
+ENABLE_ELOGIND=
+
+BINDIR=
+SYSCONFDIR=
+UNITDIR=
+ELOGINDDIR=
+
+TARGETS = intel-undervolt
+
+ifeq ($(ENABLE_SYSTEMD), 1)
+TARGETS += intel-undervolt.service intel-undervolt-loop.service
+endif
+
+all: $(TARGETS)
+
+ifeq ($(ENABLE_SYSTEMD), 1)
+intel-undervolt.service: intel-undervolt.service.in
+	sed -e "s,%BINDIR%,$(BINDIR)," $< > $@
+
+intel-undervolt-loop.service: intel-undervolt-loop.service.in
+	sed -e "s,%BINDIR%,$(BINDIR)," $< > $@
+endif
+
+intel_undervolt_headers = \
+	config.h \
+	measure.h \
+	modes.h \
+	power.h \
+	scaling.h \
+	stat.h \
+	undervolt.h \
+	util.h
+
+intel_undervolt_sources = \
+	config.c \
+	measure.c \
+	main.c \
+	modes.c \
+	power.c \
+	scaling.c \
+	stat.c \
+	undervolt.c \
+	util.c
+
+intel_undervolt_objects = $(intel_undervolt_sources:.c=.o)
+
+%.o: %.c $(intel_undervolt_headers)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) \
+	-DSYSCONFDIR='"'$(SYSCONFDIR)'"' \
+	-o $@ -c $<
+
+intel-undervolt: $(intel_undervolt_objects)
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
+
+install: all
+	install -Dm755 'intel-undervolt' \
+	"$(DESTDIR)$(BINDIR)/intel-undervolt"
+	install -Dm644 'intel-undervolt.conf' \
+	"$(DESTDIR)$(SYSCONFDIR)/intel-undervolt.conf"
+ifeq ($(ENABLE_SYSTEMD), 1)
+	install -Dm644 'intel-undervolt.service' \
+	"$(DESTDIR)$(UNITDIR)/intel-undervolt.service"
+	install -Dm644 'intel-undervolt-loop.service' \
+	"$(DESTDIR)$(UNITDIR)/intel-undervolt-loop.service"
+endif
+ifeq ($(ENABLE_ELOGIND), 1)
+	install -Dm755 'intel-undervolt.elogind' \
+	"$(DESTDIR)$(ELOGINDDIR)/system-sleep/50-intel-undervolt"
+endif
+
+clean:
+	rm -fv \
+	$(intel_undervolt_objects) \
+	intel-undervolt \
+	intel-undervolt.service \
+	intel-undervolt-loop.service

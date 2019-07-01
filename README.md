@@ -12,7 +12,7 @@ Use it on your own risk.
 
 ## Building and Installing
 
-Run `make && make install` to build and install intel-undervolt to your system.
+Run `./configure && make && make install` to build and install intel-undervolt to your system.
 Run `systemctl daemon-reload` to reload unit files.
 
 ## Configuration

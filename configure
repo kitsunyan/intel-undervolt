@@ -1,0 +1,73 @@
+#!/bin/sh
+
+arg() {
+  local a n s r
+  s="$1"
+  r="$2"
+  shift 2
+  for a in "$@"; do
+    n="${a%%=*}"
+    [ "$n" = "--$s" ] && r="${a#*=}"
+  done
+  echo "$r"
+}
+
+enable() {
+  local a n s r
+  s="$1"
+  r=false
+  shift
+  for a in "$@"; do
+    n="${a#--enable-}"
+    [ "$n" = "$s" ] && r=true
+    n="${a#--disable-}"
+    [ "$n" = "$s" ] && r=false
+  done
+  echo "$r"
+}
+
+pkgconfig="`arg pkgconfig pkg-config "$@"`"
+bindir="`arg bindir /usr/bin "$@"`"
+sysconfdir="`arg sysconfdir /etc "$@"`"
+
+enable_systemd="`enable systemd false "$@"`"
+enable_elogind="`enable elogind false "$@"`"
+
+unitdir="`arg unitdir '' "$@"`"
+[ -z "$unitdir" ] && unitdir="`"$pkgconfig" systemd --variable=systemdsystemunitdir`"
+[ -z "$unitdir" ] && unitdir="/lib/systemd/system"
+
+eloginddir="`arg eloginddir '' "$@"`"
+[ -z "$eloginddir" ] && {
+  eloginddir="`"$pkgconfig" libelogind --variable=libdir`"
+  [ "$eloginddir" ] && eloginddir="$eloginddir/elogind"
+}
+[ -z "$eloginddir" ] && eloginddir="/lib/elogind"
+
+sedcond() {
+  local v
+  "$2" && v=1
+  printf '%s' "s,^\(ENABLE_$1=\).*$,\1$v,"
+}
+
+sedarg() {
+  printf '%s' "s,^\($1=\).*$,\1$2,"
+}
+
+sed Makefile.in \
+-e "`sedcond SYSTEMD "$enable_systemd"`" \
+-e "`sedcond ELOGIND "$enable_elogind"`" \
+-e "`sedarg BINDIR "$bindir"`" \
+-e "`sedarg SYSCONFDIR "$sysconfdir"`" \
+-e "`sedarg UNITDIR "$unitdir"`" \
+-e "`sedarg ELOGINDDIR "$eloginddir"`" \
+> Makefile || exit 1
+
+echo "Enable systemd: $enable_systemd"
+echo "Enable elogind: $enable_elogind"
+echo
+echo "bindir: $bindir"
+echo "sysconfdir: $sysconfdir"
+"$enable_systemd" && echo "unitdir: $unitdir"
+"$enable_elogind" && echo "eloginddir: $eloginddir"
+echo

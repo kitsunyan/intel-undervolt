@@ -1,2 +1,5 @@
 intel-undervolt
+intel-undervolt.service
+intel-undervolt-loop.service
+Makefile
 *.o

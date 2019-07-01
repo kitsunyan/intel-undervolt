@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/intel-undervolt daemon
+ExecStart=%BINDIR%/intel-undervolt daemon
 ExecReload=/bin/kill -USR1 $MAINPID
 
 [Install]
