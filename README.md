@@ -13,7 +13,12 @@ Use it on your own risk.
 ## Building and Installing
 
 Run `./configure && make && make install` to build and install intel-undervolt to your system.
-Run `systemctl daemon-reload` to reload unit files.
+
+You can also configure the following features:
+
+- `--enable-systemd` — systemd support (intel-undervolt service and intel-undervolt-loop service)
+- `--enable-elogind` — elogind support (intel-undervolt system-sleep script)
+- `--enable-openrc` — OpenRC support (intel-undervolt-loop service)
 
 ## Configuration
 

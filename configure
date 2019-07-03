@@ -35,16 +35,25 @@ enable_systemd="`enable systemd false "$@"`"
 enable_elogind="`enable elogind false "$@"`"
 enable_openrc="`enable openrc false "$@"`"
 
-unitdir="`arg unitdir '' "$@"`"
-[ -z "$unitdir" ] && unitdir="`"$pkgconfig" systemd --variable=systemdsystemunitdir`"
-[ -z "$unitdir" ] && unitdir="/lib/systemd/system"
-
-eloginddir="`arg eloginddir '' "$@"`"
-[ -z "$eloginddir" ] && {
-  eloginddir="`"$pkgconfig" libelogind --variable=libdir`"
-  [ "$eloginddir" ] && eloginddir="$eloginddir/elogind"
+unitdir=
+"$enable_systemd" && {
+  unitdir="`arg unitdir '' "$@"`"
+  [ -z "$unitdir" ] && unitdir="`"$pkgconfig" systemd --variable=systemdsystemunitdir`"
+  [ -z "$unitdir" ] && {
+    echo 'Failed to configure unitdir'
+    exit 1
+  }
 }
-[ -z "$eloginddir" ] && eloginddir="/lib/elogind"
+
+eloginddir=
+"$enable_elogind" && {
+  eloginddir="`arg eloginddir '' "$@"`"
+  [ -z "$eloginddir" ] && eloginddir="`"$pkgconfig" libelogind --variable=libdir`"
+  [ -z "$eloginddir" ] && {
+    echo 'Failed to configure eloginddir'
+    exit 1
+  }
+}
 
 sedcond() {
   local v
