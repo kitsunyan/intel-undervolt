@@ -81,7 +81,7 @@ independently, but only one rule can be declared in this case.
 ### Applying Configuration
 
 Run `intel-undervolt read` to read current values and `intel-undervolt apply` to apply configured
-values. You can apply your configuration automatically enabling `intel-undervolt.service`.
+values. You can apply your configuration automatically enabling `intel-undervolt` service.
 
 ### Measuring the Power Consumption
 
@@ -93,5 +93,5 @@ display power consumption in interactive mode.
 Sometimes power and temperature limits could be reset by EC, BIOS, or something else. This behavior
 can be suppressed applying limits periodically. Some features like energy vesus performance
 preference switch work in daemon mode only. Use `intel-undervolt daemon` to run intel-undervolt in
-daemon mode, or use `intel-undervolt-loop.service`. You can change the interval using
+daemon mode, or use `intel-undervolt-loop` service. You can change the interval using
 `interval ${interval_in_milliseconds}` configuration parameter.

@@ -250,7 +250,7 @@ static void sigint_handler(UNUSED int sig) {
 	interrupted = true;
 }
 
-int measure_mode() {
+bool measure_mode(bool csv, float sleep) {
 	char buf[BUFSZ];
 	int maxname = 0;
 	rapl_t * rapl = rapl_init();
@@ -267,16 +267,10 @@ int measure_mode() {
 		}
 	}
 
-	char * format_env = getenv("FORMAT");
-	bool csv = format_env != NULL && !strcmp(format_env, "csv");
-	char * sleep_env = getenv("SLEEP");
-	double sleep_double = sleep_env != NULL ? atof(sleep_env) : 0;
-	if (sleep_double <= 0) {
-		sleep_double = 1;
-	}
-	struct timespec sleep;
-	sleep.tv_sec = (time_t) sleep_double;
-	sleep.tv_nsec = (suseconds_t) ((sleep_double - sleep.tv_sec) * 1000000000.);
+	struct timespec sleep_spec;
+	sleep_spec.tv_sec = (time_t) sleep;
+	sleep_spec.tv_nsec = (suseconds_t) ((sleep - sleep_spec.tv_sec)
+		* 1000000000.);
 
 	setlocale(LC_CTYPE, "");
 	if (!csv) {
@@ -333,7 +327,7 @@ int measure_mode() {
 		}
 		fflush(stdout);
 		if (!interrupted) {
-			nanosleep(&sleep, NULL);
+			nanosleep(&sleep_spec, NULL);
 		}
 	}
 	if (!csv && tty) {
@@ -348,5 +342,5 @@ int measure_mode() {
 		array_free(coretemp);
 	}
 
-	return 0;
+	return true;
 }

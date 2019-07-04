@@ -1,6 +1,8 @@
 #ifndef __MEASURE_H__
 #define __MEASURE_H__
 
-int measure_mode();
+#include <stdbool.h>
+
+bool measure_mode(bool csv, float sleep);
 
 #endif
