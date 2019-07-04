@@ -337,17 +337,17 @@ config_t * load_config(config_t * old_config, bool * nl) {
 		close(fd[0]);
 		char fdarg[20];
 		sprintf(fdarg, "%d", fd[1]);
-		execlp("/bin/bash", "/bin/bash", "-c", "readonly fd=$1;"
-			"function pz { printf '%s\\0' \"$@\" >&$fd; };"
-			"function apply { pz apply; pz undervolt \"$1\" \"$2\" \"$3\"; };"
-			"function undervolt { pz undervolt \"$1\" \"$2\" \"$3\"; };"
-			"function tdp { pz tdp; pz power package \"$1\" \"$2\"; };"
-			"function power { pz power \"$1\" \"$2\" \"$3\"; };"
-			"function tjoffset { pz tjoffset \"$1\"; };"
-			"function hwphint { pz hwphint \"$1\" \"$2\" \"$3\" \"$4\"; };"
-			"function interval { pz interval \"$1\"; };"
-			"source " SYSCONFDIR "/intel-undervolt.conf",
-			"bash", fdarg, NULL);
+		execlp("/bin/sh", "/bin/sh", "-c", "readonly fd=$1;"
+			"pz() { printf '%s\\0' \"$@\" >&$fd; };"
+			"apply() { pz apply; pz undervolt \"$1\" \"$2\" \"$3\"; };"
+			"undervolt() { pz undervolt \"$1\" \"$2\" \"$3\"; };"
+			"tdp() { pz tdp; pz power package \"$1\" \"$2\"; };"
+			"power() { pz power \"$1\" \"$2\" \"$3\"; };"
+			"tjoffset() { pz tjoffset \"$1\"; };"
+			"hwphint() { pz hwphint \"$1\" \"$2\" \"$3\" \"$4\"; };"
+			"interval() { pz interval \"$1\"; };"
+			". " SYSCONFDIR "/intel-undervolt.conf",
+			"sh", fdarg, NULL);
 		exit(1);
 	} else {
 		close(fd[1]);
