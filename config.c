@@ -305,8 +305,12 @@ config_t * load_config(config_t * old_config, bool * nl) {
 	config_t * config;
 	if (old_config) {
 		config = old_config;
-		array_free(config->undervolts);
-		array_free(config->hwp_hints);
+		if (config->undervolts) {
+			array_free(config->undervolts);
+		}
+		if (config->hwp_hints) {
+			array_free(config->hwp_hints);
+		}
 	} else {
 		config = malloc(sizeof(config_t));
 		if (!config) {

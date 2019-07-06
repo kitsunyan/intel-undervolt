@@ -208,8 +208,12 @@ void rapl_measure(rapl_t * rapl) {
 void rapl_free(rapl_t * rapl) {
 	if (rapl) {
 		rapl_full_t * full = (rapl_full_t *) rapl;
-		array_free(full->parent.devices);
-		array_free(full->exts);
+		if (full->parent.devices) {
+			array_free(full->parent.devices);
+		}
+		if (full->exts) {
+			array_free(full->exts);
+		}
 		free(full);
 	}
 }
