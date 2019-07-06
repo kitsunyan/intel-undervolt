@@ -34,16 +34,16 @@ bool safe_rw(uint64_t * addr, uint64_t * data, bool write) {
 	return success;
 }
 
-typedef struct {
-	array_t parent;
+struct array_full_t {
+	struct array_t parent;
 	int item_size;
 	int capacity;
 	void (* item_free)(void *);
 	void * data;
-} array_full_t;
+};
 
-array_t * array_new(int item_size, void (* item_free)(void *)) {
-	array_full_t * full = malloc(sizeof(array_full_t));
+struct array_t * array_new(int item_size, void (* item_free)(void *)) {
+	struct array_full_t * full = malloc(sizeof(struct array_full_t));
 	if (!full) {
 		return NULL;
 	}
@@ -55,13 +55,13 @@ array_t * array_new(int item_size, void (* item_free)(void *)) {
 	return &full->parent;
 }
 
-void * array_get(array_t * array, int index) {
-	array_full_t * full = (array_full_t *) array;
+void * array_get(struct array_t * array, int index) {
+	struct array_full_t * full = (struct array_full_t *) array;
 	return full->data + index * full->item_size;
 }
 
-void * array_add(array_t * array) {
-	array_full_t * full = (array_full_t *) array;
+void * array_add(struct array_t * array) {
+	struct array_full_t * full = (struct array_full_t *) array;
 	if (full->parent.count >= full->capacity) {
 		int capacity = full->capacity > 0 ? 2 * full->capacity : 2;
 		void * data = realloc(full->data, capacity * full->item_size);
@@ -74,8 +74,8 @@ void * array_add(array_t * array) {
 	return full->data + (full->parent.count++) * full->item_size;
 }
 
-bool array_shrink(array_t * array) {
-	array_full_t * full = (array_full_t *) array;
+bool array_shrink(struct array_t * array) {
+	struct array_full_t * full = (struct array_full_t *) array;
 	if (full->parent.count > full->capacity) {
 		void * data = realloc(full->data, full->parent.count * full->item_size);
 		if (!data) {
@@ -87,8 +87,8 @@ bool array_shrink(array_t * array) {
 	return true;
 }
 
-void array_free(array_t * array) {
-	array_full_t * full = (array_full_t *) array;
+void array_free(struct array_t * array) {
+	struct array_full_t * full = (struct array_full_t *) array;
 	if (full->data) {
 		if (full->item_free) {
 			int i = 0;

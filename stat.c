@@ -4,23 +4,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
+struct cpu_stat_value_t {
 	long int idle;
 	long int total;
-} cpu_stat_value_t;
+};
 
-typedef struct {
-	cpu_stat_t parent;
+struct cpu_stat_full_t {
+	struct cpu_stat_t parent;
 	int cpu_count;
-	cpu_stat_value_t * values;
-} cpu_stat_full_t;
+	struct cpu_stat_value_t * values;
+};
 
 static void read_eol(FILE * file) {
 	int c;
 	while ((c = fgetc(file)) != EOF && c != '\n');
 }
 
-cpu_stat_t * cpu_stat_init() {
+struct cpu_stat_t * cpu_stat_init() {
 	FILE * file;
 	char buf[80];
 	int cpu_count = 0;
@@ -39,9 +39,9 @@ cpu_stat_t * cpu_stat_init() {
 	}
 
 	if (cpu_count > 0) {
-		cpu_stat_full_t * full = malloc(sizeof(cpu_stat_full_t));
-		cpu_stat_value_t * values = malloc(cpu_count *
-			sizeof(cpu_stat_value_t));
+		struct cpu_stat_full_t * full = malloc(sizeof(struct cpu_stat_full_t));
+		struct cpu_stat_value_t * values = malloc(cpu_count *
+			sizeof(struct cpu_stat_value_t));
 		if (!full || !values) {
 			if (full) {
 				free(full);
@@ -52,7 +52,7 @@ cpu_stat_t * cpu_stat_init() {
 			fprintf(stderr, "No enough memory\n");
 			return NULL;
 		}
-		memset(values, 0, cpu_count * sizeof(cpu_stat_value_t));
+		memset(values, 0, cpu_count * sizeof(struct cpu_stat_value_t));
 		full->parent.single_core = 0;
 		full->parent.multi_core = 0;
 		full->cpu_count = cpu_count;
@@ -64,9 +64,9 @@ cpu_stat_t * cpu_stat_init() {
 	}
 }
 
-void cpu_stat_measure(cpu_stat_t * cpu_stat) {
+void cpu_stat_measure(struct cpu_stat_t * cpu_stat) {
 	if (cpu_stat) {
-		cpu_stat_full_t * full = (cpu_stat_full_t *) cpu_stat;
+		struct cpu_stat_full_t * full = (struct cpu_stat_full_t *) cpu_stat;
 		int index;
 		int count;
 		long int idle;
@@ -123,9 +123,9 @@ void cpu_stat_measure(cpu_stat_t * cpu_stat) {
 	}
 }
 
-void cpu_stat_free(cpu_stat_t * cpu_stat) {
+void cpu_stat_free(struct cpu_stat_t * cpu_stat) {
 	if (cpu_stat) {
-		cpu_stat_full_t * full = (cpu_stat_full_t *) cpu_stat;
+		struct cpu_stat_full_t * full = (struct cpu_stat_full_t *) cpu_stat;
 		free(full->values);
 		free(full);
 	}

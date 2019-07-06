@@ -11,7 +11,7 @@
 
 bool read_apply_mode(bool write) {
 	bool nl = false;
-	config_t * config = load_config(NULL, &nl);
+	struct config_t * config = load_config(NULL, &nl);
 	bool success = true;
 	unsigned int i;
 
@@ -37,10 +37,10 @@ static void sigusr1_handler(UNUSED int sig) {
 }
 
 int daemon_mode() {
-	config_t * config = load_config(NULL, NULL);
+	struct config_t * config = load_config(NULL, NULL);
 	struct sigaction act;
 	unsigned int i = 0;
-	cpu_policy_t * cpu_policy = NULL;
+	struct cpu_policy_t * cpu_policy = NULL;
 
 	if (config && config->interval <= 0) {
 		fprintf(stderr, "Interval is not specified\n");

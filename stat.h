@@ -1,13 +1,13 @@
 #ifndef __STAT_H__
 #define __STAT_H__
 
-typedef struct {
+struct cpu_stat_t {
 	float single_core;
 	float multi_core;
-} cpu_stat_t;
+};
 
-cpu_stat_t * cpu_stat_init();
-void cpu_stat_measure(cpu_stat_t * cpu_stat);
-void cpu_stat_free(cpu_stat_t * cpu_stat);
+struct cpu_stat_t * cpu_stat_init();
+void cpu_stat_measure(struct cpu_stat_t * cpu_stat);
+void cpu_stat_free(struct cpu_stat_t * cpu_stat);
 
 #endif

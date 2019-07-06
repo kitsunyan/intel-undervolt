@@ -48,14 +48,14 @@ bool strn_eq_const(const char * str, const char * cstr, size_t n);
 
 bool safe_rw(uint64_t * addr, uint64_t * data, bool write);
 
-typedef struct {
+struct array_t {
 	int count;
-} array_t;
+};
 
-array_t * array_new(int item_size, void (* item_free)(void *));
-void * array_get(array_t * array, int index);
-void * array_add(array_t * array);
-bool array_shrink(array_t * array);
-void array_free(array_t * array);
+struct array_t * array_new(int item_size, void (* item_free)(void *));
+void * array_get(struct array_t * array, int index);
+void * array_add(struct array_t * array);
+bool array_shrink(struct array_t * array);
+void array_free(struct array_t * array);
 
 #endif

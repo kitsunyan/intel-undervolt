@@ -3,17 +3,17 @@
 
 #include "util.h"
 
-typedef struct {
+struct rapl_device_t {
 	char * name;
 	float power;
-} rapl_device_t;
+};
 
-typedef struct {
-	array_t * devices;
-} rapl_t;
+struct rapl_t {
+	struct array_t * devices;
+};
 
-rapl_t * rapl_init();
-void rapl_measure(rapl_t * rapl);
-void rapl_free(rapl_t * rapl);
+struct rapl_t * rapl_init();
+void rapl_measure(struct rapl_t * rapl);
+void rapl_free(struct rapl_t * rapl);
 
 #endif

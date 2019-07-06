@@ -19,14 +19,14 @@
 #define DIR_HWMON "/sys/class/hwmon"
 #define BUFSZ 80
 
-typedef struct {
+struct hwmon_t {
 	char * name;
 	char * dir;
 	int index;
-} hwmon_t;
+};
 
 static void hwmon_free(void * pointer) {
-	hwmon_t * hwmon = pointer;
+	struct hwmon_t * hwmon = pointer;
 	free(hwmon->name);
 	free(hwmon->dir);
 }
@@ -40,14 +40,14 @@ static void write_maxname(const char * name, int maxname) {
 	}
 }
 
-static void print_rapl(rapl_t * rapl, int maxname, bool * nl, bool csv) {
+static void print_rapl(struct rapl_t * rapl, int maxname, bool * nl, bool csv) {
 	bool nll = false;
 	int i;
 
 	rapl_measure(rapl);
 	if (rapl) {
 		for (i = 0; i < rapl->devices->count; i++) {
-			rapl_device_t * device = array_get(rapl->devices, i);
+			struct rapl_device_t * device = array_get(rapl->devices, i);
 			if (csv) {
 				CSV_SEPARATOR(nl, nll);
 				printf("%.03f", device->power);
@@ -60,13 +60,13 @@ static void print_rapl(rapl_t * rapl, int maxname, bool * nl, bool csv) {
 	}
 }
 
-static void print_hwmon(array_t * hwmons, int maxname, char * buf,
+static void print_hwmon(struct array_t * hwmons, int maxname, char * buf,
 	char * degstr, bool * nl, bool csv) {
 	bool nll = false;
 	int i;
 
 	for (i = 0; hwmons && i < hwmons->count; i++) {
-		hwmon_t * hwmon = array_get(hwmons, i);
+		struct hwmon_t * hwmon = array_get(hwmons, i);
 		int fd;
 
 		sprintf(buf, DIR_HWMON "/%s/temp%d_input", hwmon->dir, hwmon->index);
@@ -155,10 +155,10 @@ END_IGNORE_FORMAT_OVERFLOW
 	return false;
 }
 
-static array_t * get_coretemp(int * maxname) {
+static struct array_t * get_coretemp(int * maxname) {
 	char hdir[BUFSZ];
 	char buf[BUFSZ];
-	array_t * hwmons = NULL;
+	struct array_t * hwmons = NULL;
 	int i;
 
 	if (!get_hwmon("coretemp", hdir)) {
@@ -170,7 +170,7 @@ static array_t * get_coretemp(int * maxname) {
 		int fd;
 		char * name = NULL;
 		char * dir;
-		hwmon_t * hwmon;
+		struct hwmon_t * hwmon;
 
 BEGIN_IGNORE_FORMAT_OVERFLOW
 		sprintf(buf, DIR_HWMON "/%s/temp%d_input", hdir, i);
@@ -215,7 +215,7 @@ END_IGNORE_FORMAT_OVERFLOW
 		strcpy(dir, hdir);
 
 		if (!hwmons) {
-			hwmons = array_new(sizeof(hwmon_t), hwmon_free);
+			hwmons = array_new(sizeof(struct hwmon_t), hwmon_free);
 			if (!hwmons) {
 				free(name);
 				free(dir);
@@ -253,15 +253,15 @@ static void sigint_handler(UNUSED int sig) {
 bool measure_mode(bool csv, float sleep) {
 	char buf[BUFSZ];
 	int maxname = 0;
-	rapl_t * rapl = rapl_init();
-	array_t * coretemp = get_coretemp(&maxname);
+	struct rapl_t * rapl = rapl_init();
+	struct array_t * coretemp = get_coretemp(&maxname);
 	char degstr[5] = " C";
 	bool tty = isatty(1);
 
 	if (rapl) {
 		int i;
 		for (i = 0; i < rapl->devices->count; i++) {
-			rapl_device_t * device = array_get(rapl->devices, i);
+			struct rapl_device_t * device = array_get(rapl->devices, i);
 			int length = strlen(device->name);
 			maxname = length > maxname ? length : maxname;
 		}

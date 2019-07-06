@@ -13,24 +13,22 @@ enum arg_mode {
 	ARG_MODE_FLOAT
 };
 
-typedef struct arg_t arg_t;
-
-typedef struct arg_t {
+struct arg_t {
 	char short_name;
 	const char * long_name;
 	enum arg_mode mode;
-	bool (* check)(arg_t *);
+	bool (* check)(struct arg_t *);
 	bool present;
 	const char * value;
 	float float_value;
-} arg_t;
+};
 
 #define ARG_END { '\0', NULL, ARG_MODE_END, NULL, false, NULL, 0 }
 #define ARG_EMPTY(s, l, c) { s, l, ARG_MODE_EMPTY, c, false, NULL, 0 }
 #define ARG_STRING(s, l, c, v) { s, l, ARG_MODE_STRING, c, false, v, 0 }
 #define ARG_FLOAT(s, l, c, v) { s, l, ARG_MODE_FLOAT, c, false, #v, v }
 
-static bool handle_arg(arg_t * arg, const char * value, bool * consume_next) {
+static bool handle_arg(struct arg_t * arg, const char * value, bool * consume_next) {
 	arg->present = true;
 	if (arg->mode == ARG_MODE_END || arg->mode == ARG_MODE_EMPTY) {
 		*consume_next = false;
@@ -63,7 +61,7 @@ static bool handle_arg(arg_t * arg, const char * value, bool * consume_next) {
 	return !arg->check || arg->check(arg);
 }
 
-static bool parse_args(int argc, char ** argv, arg_t * args) {
+static bool parse_args(int argc, char ** argv, struct arg_t * args) {
 	int i, j, k;
 	bool consume_next;
 	for (i = 0; i < argc; i++) {
@@ -142,7 +140,7 @@ static bool parse_args(int argc, char ** argv, arg_t * args) {
 	return true;
 }
 
-static arg_t * arg(arg_t * args, const char * name) {
+static struct arg_t * arg(struct arg_t * args, const char * name) {
 	int i;
 	bool s = strlen(name) == 1;
 	for (i = 0; args && args[i].mode != ARG_MODE_END; i++) {
@@ -154,7 +152,7 @@ static arg_t * arg(arg_t * args, const char * name) {
 	return NULL;
 }
 
-static bool arg_check_measure_format(arg_t * arg) {
+static bool arg_check_measure_format(struct arg_t * arg) {
 	if (strcmp(arg->value, "terminal") && strcmp(arg->value, "csv")) {
 		fprintf(stderr, "Available formats: terminal, csv.\n");
 		return false;
@@ -162,7 +160,7 @@ static bool arg_check_measure_format(arg_t * arg) {
 	return true;
 }
 
-static bool arg_check_measure_sleep(arg_t * arg) {
+static bool arg_check_measure_sleep(struct arg_t * arg) {
 	if (arg->float_value <= 0) {
 		fprintf(stderr, "Sleep interval should be greater than 0.\n");
 		return false;
@@ -178,7 +176,7 @@ int main(int argc, char ** argv) {
 		return parse_args(argc - 2, &argv[2], NULL) &&
 			read_apply_mode(true) ? 0 : 1;
 	} else if (argc >= 2 && !strcmp(argv[1], "measure")) {
-		arg_t args[3] = {
+		struct arg_t args[3] = {
 			ARG_STRING('f', "format", arg_check_measure_format, "terminal"),
 			ARG_FLOAT('s', "sleep", arg_check_measure_sleep, 1),
 			ARG_END

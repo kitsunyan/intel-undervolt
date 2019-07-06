@@ -14,13 +14,13 @@
 #define FILE_HINT "energy_performance_preference"
 #define BUFSZ 80
 
-typedef struct {
+struct cpu_policy_full_t {
 	int cpu_count;
-	cpu_stat_t * cpu_stat;
-	rapl_t * rapl;
-} cpu_policy_full_t;
+	struct cpu_stat_t * cpu_stat;
+	struct rapl_t * rapl;
+};
 
-cpu_policy_t * cpu_policy_init() {
+struct cpu_policy_t * cpu_policy_init() {
 	int cpu_count = 0;
 	DIR * dir;
 
@@ -41,7 +41,7 @@ cpu_policy_t * cpu_policy_init() {
 	}
 
 	if (cpu_count > 0) {
-		cpu_policy_full_t * full = malloc(sizeof(cpu_policy_full_t));
+		struct cpu_policy_full_t * full = malloc(sizeof(struct cpu_policy_full_t));
 		if (!full) {
 			fprintf(stderr, "No enough memory");
 			return NULL;
@@ -49,21 +49,21 @@ cpu_policy_t * cpu_policy_init() {
 		full->cpu_count = cpu_count;
 		full->cpu_stat = cpu_stat_init();
 		full->rapl = rapl_init();
-		return full;
+		return (struct cpu_policy_t *) full;
 	} else {
 		return NULL;
 	}
 }
 
-static bool check_cpu_stat(cpu_stat_t * cpu_stat, bool multi, float threshold) {
+static bool check_cpu_stat(struct cpu_stat_t * cpu_stat, bool multi, float threshold) {
 	return cpu_stat && (multi ? cpu_stat->multi_core
 		: cpu_stat->single_core) >= threshold;
 }
 
-static int rapl_lookup(rapl_t * rapl, const char * domain) {
+static int rapl_lookup(struct rapl_t * rapl, const char * domain) {
 	int i;
 	for (i = 0; i < rapl->devices->count; i++) {
-		rapl_device_t * rapl_device = array_get(rapl->devices, i);
+		struct rapl_device_t * rapl_device = array_get(rapl->devices, i);
 		const char * tmp = strstr(rapl_device->name, domain);
 		if (tmp == rapl_device->name) {
 			int len = strlen(domain);
@@ -76,17 +76,17 @@ static int rapl_lookup(rapl_t * rapl, const char * domain) {
 	return -1;
 }
 
-static bool check_rapl(rapl_t * rapl, array_t * hwp_power_terms) {
+static bool check_rapl(struct rapl_t * rapl, struct array_t * hwp_power_terms) {
 	bool result = false;
 	if (rapl && rapl->devices && hwp_power_terms) {
 		int i;
 		for (i = 0; i < hwp_power_terms->count; i++) {
-			hwp_power_term_t * hwp_power_term = array_get(hwp_power_terms, i);
+			struct hwp_power_term_t * hwp_power_term = array_get(hwp_power_terms, i);
 			int device_index = rapl_lookup(rapl, hwp_power_term->domain);
 			float power = 0;
 			bool current;
 			if (device_index >= 0) {
-				rapl_device_t * rapl_device = array_get(rapl->devices,
+				struct rapl_device_t * rapl_device = array_get(rapl->devices,
 					device_index);
 				power = rapl_device->power;
 			}
@@ -111,9 +111,9 @@ enum {
 	STATUS_LOAD
 };
 
-void cpu_policy_update(cpu_policy_t * cpu_policy, array_t * hwp_hints) {
+void cpu_policy_update(struct cpu_policy_t * cpu_policy, struct array_t * hwp_hints) {
 	if (cpu_policy) {
-		cpu_policy_full_t * full = (cpu_policy_full_t *) cpu_policy;
+		struct cpu_policy_full_t * full = (struct cpu_policy_full_t *) cpu_policy;
 		bool handled[full->cpu_count];
 		char * current_hints[full->cpu_count];
 		bool read_hints = false;
@@ -125,7 +125,7 @@ void cpu_policy_update(cpu_policy_t * cpu_policy, array_t * hwp_hints) {
 		memset(current_hints, 0, full->cpu_count * sizeof(char *));
 
 		for (i = 0; hwp_hints && i < hwp_hints->count; i++) {
-			hwp_hint_t * hwp_hint = array_get(hwp_hints, i);
+			struct hwp_hint_t * hwp_hint = array_get(hwp_hints, i);
 			int total_handled = 0;
 			const char * hint;
 			char buf[BUFSZ];
@@ -227,9 +227,9 @@ void cpu_policy_update(cpu_policy_t * cpu_policy, array_t * hwp_hints) {
 	}
 }
 
-void cpu_policy_free(cpu_policy_t * cpu_policy) {
+void cpu_policy_free(struct cpu_policy_t * cpu_policy) {
 	if (cpu_policy) {
-		cpu_policy_full_t * full = (cpu_policy_full_t *) cpu_policy;
+		struct cpu_policy_full_t * full = (struct cpu_policy_full_t *) cpu_policy;
 		if (full->cpu_stat) {
 			cpu_stat_free(full->cpu_stat);
 		}

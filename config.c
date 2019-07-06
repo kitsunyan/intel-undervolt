@@ -9,17 +9,17 @@
 #include <unistd.h>
 
 static void undervolt_free(void * pointer) {
-	undervolt_t * undervolt = pointer;
+	struct undervolt_t * undervolt = pointer;
 	free(undervolt->title);
 }
 
 static void hwp_power_term_free(void * pointer) {
-	hwp_power_term_t * hwp_power_term = pointer;
+	struct hwp_power_term_t * hwp_power_term = pointer;
 	free(hwp_power_term->domain);
 }
 
 static void hwp_hint_free(void * pointer) {
-	hwp_hint_t * hwp_hint = pointer;
+	struct hwp_hint_t * hwp_hint = pointer;
 	if (hwp_hint->hwp_power_terms) {
 		array_free(hwp_hint->hwp_power_terms);
 	}
@@ -27,7 +27,7 @@ static void hwp_hint_free(void * pointer) {
 	free(hwp_hint->normal_hint);
 }
 
-void free_config(config_t * config) {
+void free_config(struct config_t * config) {
 	if (config) {
 		unsigned int i;
 		if (config->undervolts) {
@@ -52,7 +52,7 @@ void free_config(config_t * config) {
 }
 
 static bool parse_power_limit_value(const char * line,
-	power_limit_value_t * value) {
+	struct power_limit_value_t * value) {
 	char * tmp = NULL;
 	char * next = NULL;
 	int power = (int) strtol(line, &tmp, 10);
@@ -146,7 +146,7 @@ static bool parse_hwp_load(const char * line, bool * multi, float * threshold,
 	}
 }
 
-static bool parse_hwp_power(const char * line, array_t ** hwp_power_terms,
+static bool parse_hwp_power(const char * line, struct array_t ** hwp_power_terms,
 	bool * nl, bool * nll) {
 	int args = 1;
 	bool error = false;
@@ -154,7 +154,7 @@ static bool parse_hwp_power(const char * line, array_t ** hwp_power_terms,
 	char * domain = NULL;
 	bool greater;
 	float power;
-	array_t * result = NULL;
+	struct array_t * result = NULL;
 
 	while (line) {
 		int len;
@@ -198,7 +198,7 @@ static bool parse_hwp_power(const char * line, array_t ** hwp_power_terms,
 				break;
 			}
 		} else if (args % 4 == 3) {
-			hwp_power_term_t * hwp_power_term;
+			struct hwp_power_term_t * hwp_power_term;
 			power = strtof(line, &tmp);
 			if (tmp) {
 				int tmp_len = (int) (tmp - line);
@@ -210,7 +210,7 @@ static bool parse_hwp_power(const char * line, array_t ** hwp_power_terms,
 				}
 			}
 			if (!result) {
-				result = array_new(sizeof(hwp_power_term_t),
+				result = array_new(sizeof(struct hwp_power_term_t),
 					hwp_power_term_free);
 			}
 			hwp_power_term = result ? array_add(result) : NULL;
@@ -266,13 +266,13 @@ static bool contains_hint_or_append(const char ** hints, int count,
 	return false;
 }
 
-static bool validate_hwp_hint(array_t * hwp_hints, bool * nl, bool * nll) {
+static bool validate_hwp_hint(struct array_t * hwp_hints, bool * nl, bool * nll) {
 	int i;
 	int force_count = 0;
 	const char * hints[2 * hwp_hints->count];
 
 	for (i = 0; i < hwp_hints->count; i++) {
-		hwp_hint_t * hwp_hint = array_get(hwp_hints, i);
+		struct hwp_hint_t * hwp_hint = array_get(hwp_hints, i);
 		if (contains_hint_or_append(hints, 2 * i, hwp_hint->load_hint) ||
 			contains_hint_or_append(hints, 2 * i + 1, hwp_hint->normal_hint)) {
 			NEW_LINE(nl, *nll);
@@ -299,10 +299,10 @@ static bool validate_hwp_hint(array_t * hwp_hints, bool * nl, bool * nll) {
 	return true;
 }
 
-config_t * load_config(config_t * old_config, bool * nl) {
+struct config_t * load_config(struct config_t * old_config, bool * nl) {
 	unsigned int i;
 	bool nll = false;
-	config_t * config;
+	struct config_t * config;
 	if (old_config) {
 		config = old_config;
 		if (config->undervolts) {
@@ -312,7 +312,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 			array_free(config->hwp_hints);
 		}
 	} else {
-		config = malloc(sizeof(config_t));
+		config = malloc(sizeof(struct config_t));
 		if (!config) {
 			NEW_LINE(nl, nll);
 			perror("No enough memory");
@@ -390,7 +390,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				int len;
 				char * title;
 				float value;
-				undervolt_t * undervolt;
+				struct undervolt_t * undervolt;
 				iuv_read_line_error();
 				tmp = NULL;
 				index = (int) strtol(line, &tmp, 10);
@@ -414,7 +414,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 					iuv_print_break("Invalid value: %s\n", line);
 				}
 				if (!config->undervolts) {
-					config->undervolts = array_new(sizeof(undervolt_t),
+					config->undervolts = array_new(sizeof(struct undervolt_t),
 						undervolt_free);
 					if (!config->undervolts) {
 						free(title);
@@ -478,10 +478,10 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				bool load_multi;
 				float load_threshold;
 				bool power = false;
-				array_t * hwp_power_terms = NULL;
+				struct array_t * hwp_power_terms = NULL;
 				char * load_hint;
 				char * normal_hint;
-				hwp_hint_t * hwp_hint;
+				struct hwp_hint_t * hwp_hint;
 				iuv_read_line_error();
 				if (!strcmp(line, "force")) {
 					force = true;
@@ -529,7 +529,7 @@ config_t * load_config(config_t * old_config, bool * nl) {
 				}
 				memcpy(normal_hint, line, len + 1);
 				if (!config->hwp_hints) {
-					config->hwp_hints = array_new(sizeof(hwp_hint_t),
+					config->hwp_hints = array_new(sizeof(struct hwp_hint_t),
 						hwp_hint_free);
 					if (!config->hwp_hints) {
 						free(load_hint);

@@ -41,13 +41,13 @@ static inline bool cpuctl_wr(int fd, int a, uint64_t * t) {
 
 #endif
 
-bool undervolt(config_t * config, bool * nl, bool write) {
+bool undervolt(struct config_t * config, bool * nl, bool write) {
 	bool success = true;
 	bool nll = false;
 	int i;
 
 	for (i = 0; config->undervolts && i < config->undervolts->count; i++) {
-		undervolt_t * undervolt = array_get(config->undervolts, i);
+		struct undervolt_t * undervolt = array_get(config->undervolts, i);
 
 		static const int mask = 0x800;
 		uint64_t uvint = ((uint64_t) (mask - absf(undervolt->value) * 1.024f +
@@ -117,10 +117,10 @@ static int power_from_seconds(float seconds, int time_unit) {
 	}
 }
 
-bool power_limit(config_t * config, int index, bool * nl, bool write) {
+bool power_limit(struct config_t * config, int index, bool * nl, bool write) {
 	bool nll = false;
-	power_limit_t * power = &config->power[index];
-	power_domain_t * domain = &power_domains[index];
+	struct power_limit_t * power = &config->power[index];
+	struct power_domain_t * domain = &power_domains[index];
 	if (power->apply) {
 		void * mem = NULL;
 		if (power->mem != NULL) {
@@ -236,7 +236,7 @@ bool power_limit(config_t * config, int index, bool * nl, bool write) {
 	}
 }
 
-bool tjoffset(config_t * config, bool * nl, bool write) {
+bool tjoffset(struct config_t * config, bool * nl, bool write) {
 	bool nll = false;
 	if (config->tjoffset_apply) {
 		const char * errstr = NULL;

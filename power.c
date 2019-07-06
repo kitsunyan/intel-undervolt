@@ -12,35 +12,35 @@
 #define DIR_POWERCAP "/sys/class/powercap"
 #define BUFSZ 80
 
-typedef struct {
+struct rapl_device_ext_t {
 	char * dir;
 	int64_t last;
 	struct timespec time;
-} rapl_device_ext_t;
+};
 
-typedef struct {
-	rapl_t parent;
-	array_t * exts;
-} rapl_full_t;
+struct rapl_full_t {
+	struct rapl_t parent;
+	struct array_t * exts;
+};
 
 static void rapl_device_free(void * pointer) {
-	rapl_device_t * device = pointer;
+	struct rapl_device_t * device = pointer;
 	free(device->name);
 }
 
 static void rapl_device_ext_free(void * pointer) {
-	rapl_device_ext_t * ext = pointer;
+	struct rapl_device_ext_t * ext = pointer;
 	free(ext->dir);
 }
 
-rapl_t * rapl_init() {
+struct rapl_t * rapl_init() {
 	char buf[BUFSZ];
 	DIR * dir;
 	struct dirent * dirent;
-	array_t * devices = NULL;
-	array_t * exts = NULL;
+	struct array_t * devices = NULL;
+	struct array_t * exts = NULL;
 	bool nomem = false;
-	rapl_full_t * full = NULL;
+	struct rapl_full_t * full = NULL;
 
 	dir = opendir(DIR_POWERCAP);
 	if (dir == NULL) {
@@ -58,8 +58,8 @@ END_IGNORE_FORMAT_OVERFLOW
 			if (fd >= 0) {
 				int size = read(fd, buf, BUFSZ - 1);
 				if (size >= 1) {
-					rapl_device_t * device;
-					rapl_device_ext_t * ext;
+					struct rapl_device_t * device;
+					struct rapl_device_ext_t * ext;
 					char * name;
 					char * dir;
 					int name_length;
@@ -90,9 +90,9 @@ END_IGNORE_FORMAT_OVERFLOW
 					memcpy(dir, dirent->d_name, dir_length + 1);
 
 					if (!devices && !exts) {
-						devices = array_new(sizeof(rapl_device_t),
+						devices = array_new(sizeof(struct rapl_device_t),
 							rapl_device_free);
-						exts = array_new(sizeof(rapl_device_ext_t),
+						exts = array_new(sizeof(struct rapl_device_ext_t),
 							rapl_device_ext_free);
 						if (!devices || !exts) {
 							free(name);
@@ -133,7 +133,7 @@ END_IGNORE_FORMAT_OVERFLOW
 
 	closedir(dir);
 	if (!nomem) {
-		full = malloc(sizeof(rapl_full_t));
+		full = malloc(sizeof(struct rapl_full_t));
 		if (!full) {
 			nomem = true;
 		}
@@ -160,16 +160,16 @@ END_IGNORE_FORMAT_OVERFLOW
 	}
 }
 
-void rapl_measure(rapl_t * rapl) {
+void rapl_measure(struct rapl_t * rapl) {
 	if (rapl) {
 		char buf[BUFSZ];
-		rapl_full_t * full = (rapl_full_t *) rapl;
+		struct rapl_full_t * full = (struct rapl_full_t *) rapl;
 		int i;
 
 		for (i = 0; i < full->parent.devices->count; i++) {
 			int fd;
-			rapl_device_t * device = array_get(full->parent.devices, i);
-			rapl_device_ext_t * ext = array_get(full->exts, i);
+			struct rapl_device_t * device = array_get(full->parent.devices, i);
+			struct rapl_device_ext_t * ext = array_get(full->exts, i);
 			sprintf(buf, DIR_POWERCAP "/%s/energy_uj", ext->dir);
 			fd = open(buf, O_RDONLY);
 			if (fd >= 0) {
@@ -205,9 +205,9 @@ void rapl_measure(rapl_t * rapl) {
 	}
 }
 
-void rapl_free(rapl_t * rapl) {
+void rapl_free(struct rapl_t * rapl) {
 	if (rapl) {
-		rapl_full_t * full = (rapl_full_t *) rapl;
+		struct rapl_full_t * full = (struct rapl_full_t *) rapl;
 		if (full->parent.devices) {
 			array_free(full->parent.devices);
 		}
