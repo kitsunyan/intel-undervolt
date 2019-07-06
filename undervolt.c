@@ -73,7 +73,7 @@ bool undervolt(struct config_t * config, bool * nl, bool write) {
 		if (errstr) {
 			success = false;
 			printf("%s (%d): %s\n", undervolt->title, undervolt->index, errstr);
-		} else {
+		} else if (nl) {
 			float val = ((mask - (rdval >> 21)) & (mask - 1)) / 1.024f;
 			printf("%s (%d): -%.02f mV\n", undervolt->title,
 				undervolt->index, val);

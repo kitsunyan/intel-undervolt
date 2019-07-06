@@ -57,6 +57,17 @@ struct hwp_hint_t {
 	char * normal_hint;
 };
 
+enum daemon_action_kind {
+	DAEMON_ACTION_KIND_UNDERVOLT,
+	DAEMON_ACTION_KIND_POWER,
+	DAEMON_ACTION_KIND_TJOFFSET
+};
+
+struct daemon_action_t {
+	enum daemon_action_kind kind;
+	bool once;
+};
+
 struct config_t {
 	int fd_msr;
 	int fd_mem;
@@ -66,6 +77,7 @@ struct config_t {
 	float tjoffset;
 	struct array_t * hwp_hints;
 	int interval;
+	struct array_t * daemon_actions;
 };
 
 void free_config(struct config_t * config);

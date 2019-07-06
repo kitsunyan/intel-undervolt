@@ -95,3 +95,5 @@ can be suppressed applying limits periodically. Some features like energy vesus 
 preference switch work in daemon mode only. Use `intel-undervolt daemon` to run intel-undervolt in
 daemon mode, or use `intel-undervolt-loop` service. You can change the interval using
 `interval ${interval_in_milliseconds}` configuration parameter.
+
+You can specify which actions daemon should perform using `daemon` configuration parameter. You can use `once` option to ensure action will be performed only once.

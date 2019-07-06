@@ -54,11 +54,9 @@ void free_config(struct config_t * config) {
 static bool parse_power_limit_value(const char * line,
 	struct power_limit_value_t * value) {
 	char * tmp = NULL;
-	char * next = NULL;
 	int power = (int) strtol(line, &tmp, 10);
 	float time_window = -1;
 	bool enabled = true;
-	int n;
 	if (tmp && tmp[0] == '/' && tmp[1]) {
 		time_window = strtof(&tmp[1], &tmp);
 		if (tmp && tmp[0] && tmp[0] != ':') {
@@ -66,6 +64,8 @@ static bool parse_power_limit_value(const char * line,
 		}
 	}
 	while (tmp && tmp[0] == ':' && tmp[1]) {
+		char * next = NULL;
+		int n;
 		tmp = &tmp[1];
 		next = strstr(tmp, ":");
 		n = next ? (int) (next - tmp) : (int) strlen(tmp);
@@ -311,6 +311,9 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 		if (config->hwp_hints) {
 			array_free(config->hwp_hints);
 		}
+		if (config->daemon_actions) {
+			array_free(config->daemon_actions);
+		}
 	} else {
 		config = malloc(sizeof(struct config_t));
 		if (!config) {
@@ -328,6 +331,7 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 	config->tjoffset_apply = false;
 	config->hwp_hints = NULL;
 	config->interval = -1;
+	config->daemon_actions = NULL;
 
 	int fd[2];
 	pipe(fd);
@@ -350,6 +354,7 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 			"tjoffset() { pz tjoffset \"$1\"; };"
 			"hwphint() { pz hwphint \"$1\" \"$2\" \"$3\" \"$4\"; };"
 			"interval() { pz interval \"$1\"; };"
+			"daemon() { pz daemon \"$1\"; };"
 			". " SYSCONFDIR "/intel-undervolt.conf",
 			"sh", fdarg, NULL);
 		exit(1);
@@ -462,15 +467,6 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 				}
 				config->tjoffset = tjoffset;
 				config->tjoffset_apply = true;
-			} else if (!strcmp(line, "interval")) {
-				int interval;
-				iuv_read_line_error();
-				tmp = NULL;
-				interval = (int) strtol(line, &tmp, 10);
-				if (!line[0] || (tmp && tmp[0])) {
-					iuv_print_break("Invalid interval: %s\n", line);
-				}
-				config->interval = interval;
 			} else if (!strcmp(line, "hwphint")) {
 				bool force = false;
 				int len;
@@ -551,6 +547,59 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 				hwp_hint->hwp_power_terms = hwp_power_terms;
 				hwp_hint->load_hint = load_hint;
 				hwp_hint->normal_hint = normal_hint;
+			} else if (!strcmp(line, "interval")) {
+				int interval;
+				iuv_read_line_error();
+				tmp = NULL;
+				interval = (int) strtol(line, &tmp, 10);
+				if (!line[0] || (tmp && tmp[0])) {
+					iuv_print_break("Invalid interval: %s\n", line);
+				}
+				config->interval = interval;
+			} else if (!strcmp(line, "daemon")) {
+				struct daemon_action_t * daemon_action;
+				bool once = false;
+				bool invalid_option = false;
+				enum daemon_action_kind kind;
+				char * tmp;
+				int n;
+				iuv_read_line_error();
+				tmp = strstr(line, ":");
+				n = tmp ? (int) (tmp - line) : (int) strlen(line);
+				if (strn_eq_const(line, "undervolt", n)) {
+					kind = DAEMON_ACTION_KIND_UNDERVOLT;
+				} else if (strn_eq_const(line, "power", n)) {
+					kind = DAEMON_ACTION_KIND_POWER;
+				} else if (strn_eq_const(line, "tjoffset", n)) {
+					kind = DAEMON_ACTION_KIND_TJOFFSET;
+				} else {
+					invalid_option = true;
+				}
+				while (!invalid_option && tmp && tmp[0] == ':' && tmp[1]) {
+					char * next = NULL;
+					tmp = &tmp[1];
+					next = strstr(tmp, ":");
+					n = next ? (int) (next - tmp) : (int) strlen(tmp);
+					if (strn_eq_const(tmp, "once", n)) {
+						once = true;
+					} else {
+						invalid_option = true;
+						break;
+					}
+					tmp = next ? next : NULL;
+				}
+				if (!line[0] || (tmp && tmp[0])) {
+					iuv_print_break("Invalid daemon action: %s\n", line);
+				}
+				if (!config->daemon_actions) {
+					config->daemon_actions = array_new(sizeof(struct daemon_action_t), NULL);
+				}
+				daemon_action = array_add(config->daemon_actions);
+				if (!daemon_action) {
+					iuv_print_break_nomem();
+				}
+				daemon_action->kind = kind;
+				daemon_action->once = once;
 			} else if (!strcmp(line, "apply")) {
 				if (!apply_deprecation) {
 					NEW_LINE(nl, nll);
@@ -708,6 +757,9 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 			}
 			if (config->hwp_hints) {
 				array_shrink(config->hwp_hints);
+			}
+			if (config->daemon_actions) {
+				array_shrink(config->daemon_actions);
 			}
 		}
 	}

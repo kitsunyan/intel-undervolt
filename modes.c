@@ -39,7 +39,10 @@ static void sigusr1_handler(UNUSED int sig) {
 int daemon_mode() {
 	struct config_t * config = load_config(NULL, NULL);
 	struct sigaction act;
-	unsigned int i = 0;
+	int i = 0;
+	bool undervolt_done = false;
+	bool power_done = false;
+	bool tjoffset_done = false;
 	struct cpu_policy_t * cpu_policy = NULL;
 
 	if (config && config->interval <= 0) {
@@ -68,10 +71,34 @@ int daemon_mode() {
 				cpu_policy = cpu_policy_init();
 			}
 
-			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
-				power_limit(config, i, NULL, true);
+			for (i = 0; config->daemon_actions && i < config->daemon_actions->count; i++) {
+				struct daemon_action_t * daemon_action = array_get(config->daemon_actions, i);
+				switch (daemon_action->kind) {
+					case DAEMON_ACTION_KIND_UNDERVOLT: {
+						if (!daemon_action->once || !undervolt_done) {
+							undervolt(config, NULL, true);
+						}
+						undervolt_done = true;
+						break;
+					}
+					case DAEMON_ACTION_KIND_POWER: {
+						if (!daemon_action->once || !power_done) {
+							for (i = 0; i < (int) ARRAY_SIZE(config->power); i++) {
+								power_limit(config, i, NULL, true);
+							}
+						}
+						power_done = true;
+						break;
+					}
+					case DAEMON_ACTION_KIND_TJOFFSET: {
+						if (!daemon_action->once || !tjoffset_done) {
+							tjoffset(config, NULL, true);
+						}
+						tjoffset_done = true;
+						break;
+					}
+				}
 			}
-			tjoffset(config, NULL, true);
 
 			if (cpu_policy) {
 				if (config->hwp_hints) {
