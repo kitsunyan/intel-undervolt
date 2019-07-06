@@ -9,21 +9,26 @@
 #include <string.h>
 #include <unistd.h>
 
-bool read_apply_mode(bool write) {
+bool read_apply_mode(bool write, bool trigger) {
 	bool nl = false;
 	struct config_t * config = load_config(NULL, &nl);
 	bool success = true;
 	unsigned int i;
 
 	if (config) {
-		success &= undervolt(config, &nl, write);
-		for (i = 0; i < ARRAY_SIZE(config->power); i++) {
-			success &= power_limit(config, i, &nl, write);
-		}
-		success &= tjoffset(config, &nl, write);
+		if (trigger && !config->enable) {
+			fprintf(stderr, "Triggers are disabled\n");
+			return false;
+		} else {
+			success &= undervolt(config, &nl, write);
+			for (i = 0; i < ARRAY_SIZE(config->power); i++) {
+				success &= power_limit(config, i, &nl, write);
+			}
+			success &= tjoffset(config, &nl, write);
 
-		free_config(config);
-		return success;
+			free_config(config);
+			return success;
+		}
 	} else {
 		fprintf(stderr, "Failed to setup the program\n");
 		return false;

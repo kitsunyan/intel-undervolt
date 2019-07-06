@@ -81,7 +81,10 @@ independently, but only one rule can be declared in this case.
 ### Applying Configuration
 
 Run `intel-undervolt read` to read current values and `intel-undervolt apply` to apply configured
-values. You can apply your configuration automatically enabling `intel-undervolt` service.
+values.
+
+You can apply your configuration automatically enabling `intel-undervolt` service. Elogind
+users should pass `yes` to `enable` option in `intel-undervolt.conf`.
 
 ### Measuring the Power Consumption
 

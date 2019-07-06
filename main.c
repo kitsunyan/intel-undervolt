@@ -44,7 +44,9 @@ static bool handle_arg(struct arg_t * arg, const char * value, bool * consume_ne
 			return false;
 		}
 		arg->value = value;
-		if (arg->mode == ARG_MODE_FLOAT) {
+		if (arg->mode == ARG_MODE_EMPTY) {
+			arg->float_value = 1;
+		} else if (arg->mode == ARG_MODE_FLOAT) {
 			char * tmp = NULL;
 			arg->float_value = strtof(value, &tmp);
 			if (tmp && (tmp == value || tmp[0])) {
@@ -171,10 +173,14 @@ static bool arg_check_measure_sleep(struct arg_t * arg) {
 int main(int argc, char ** argv) {
 	if (argc >= 2 && !strcmp(argv[1], "read")) {
 		return parse_args(argc - 2, &argv[2], NULL) &&
-			read_apply_mode(false) ? 0 : 1;
+			read_apply_mode(false, false) ? 0 : 1;
 	} else if (argc >= 2 && !strcmp(argv[1], "apply")) {
-		return parse_args(argc - 2, &argv[2], NULL) &&
-			read_apply_mode(true) ? 0 : 1;
+		struct arg_t args[2] = {
+			ARG_EMPTY('t', "trigger", NULL),
+			ARG_END
+		};
+		return parse_args(argc - 2, &argv[2], args) &&
+			read_apply_mode(true, arg(args, "trigger")->present) ? 0 : 1;
 	} else if (argc >= 2 && !strcmp(argv[1], "measure")) {
 		struct arg_t args[3] = {
 			ARG_STRING('f', "format", arg_check_measure_format, "terminal"),

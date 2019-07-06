@@ -324,6 +324,7 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 		config->fd_msr = -1;
 		config->fd_mem = -1;
 	}
+	config->enable = false;
 	config->undervolts = NULL;
 	for (i = 0; i < ARRAY_SIZE(config->power); i++) {
 		config->power[i].apply = false;
@@ -347,6 +348,7 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 		sprintf(fdarg, "%d", fd[1]);
 		execlp("/bin/sh", "/bin/sh", "-c", "readonly fd=$1;"
 			"pz() { printf '%s\\0' \"$@\" >&$fd; };"
+			"enable() { pz enable \"$1\"; };"
 			"apply() { pz apply; pz undervolt \"$1\" \"$2\" \"$3\"; };"
 			"undervolt() { pz undervolt \"$1\" \"$2\" \"$3\"; };"
 			"tdp() { pz tdp; pz power package \"$1\" \"$2\"; };"
@@ -390,7 +392,18 @@ struct config_t * load_config(struct config_t * old_config, bool * nl) {
 		#define iuv_read_line_error() iuv_read_line_error_action({})
 
 		while (iuv_read_line()) {
-			if (!strcmp(line, "undervolt")) {
+			if (!strcmp(line, "enable")) {
+				bool enable;
+				iuv_read_line_error();
+				if (!strcmp(line, "yes")) {
+					enable = true;
+				} else if (!strcmp(line, "no")) {
+					enable = false;
+				} else {
+					iuv_print_break("Invalid value: %s\n", line);
+				}
+				config->enable = enable;
+			} else if (!strcmp(line, "undervolt")) {
 				int index;
 				int len;
 				char * title;

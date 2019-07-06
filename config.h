@@ -71,6 +71,7 @@ struct daemon_action_t {
 struct config_t {
 	int fd_msr;
 	int fd_mem;
+	bool enable;
 	struct array_t * undervolts;
 	struct power_limit_t power[ARRAY_SIZE(power_domains)];
 	bool tjoffset_apply;
