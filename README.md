@@ -100,3 +100,11 @@ daemon mode, or use `intel-undervolt-loop` service. You can change the interval 
 `interval ${interval_in_milliseconds}` configuration parameter.
 
 You can specify which actions daemon should perform using `daemon` configuration parameter. You can use `once` option to ensure action will be performed only once.
+
+### Troubleshooting
+
+Any changes made to the configuration file should be always tested before applying them to the init process used by the system. It is not advisable to follow specific voltage values other users recommend, even if using the same CPU and GPU. Thus, it is advisable to test with stepwise reductions of values as small as 5mv to 10mv at most. Not doing so, could lead to an unbootable system.
+
+To revert changes in this situation, a couple of arguments needs to be added on the kernel command line via GRUB. Hold `Shift` (BIOS) or `Esc` (UEFI) during boot, if using a quiet boot configuration. Press `E` to edit the affected GNU/Linux distribution entry. Go to the line where it starts with `linux`, remove `quiet` and add `systemd.unit=multi-user.target` & `systemd.unit=emergency.target`. Press `Ctrl + x` to continue.
+
+From this point, a root command prompt of the system will be displayed. From there, revert all changes the same way as they have been applied. Please note that this method could vary depending on the init process and distribution used.
