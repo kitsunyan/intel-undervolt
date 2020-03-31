@@ -1,6 +1,7 @@
 [Unit]
 Description=Intel Undervolt Service
 After=multi-user.target suspend.target hibernate.target hybrid-sleep.target
+ConditionVirtualization=no
 
 [Service]
 Type=oneshot

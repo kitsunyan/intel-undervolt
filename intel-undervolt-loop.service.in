@@ -1,6 +1,7 @@
 [Unit]
 Description=Intel Undervolt Loop Service
 After=multi-user.target
+ConditionVirtualization=no
 
 [Service]
 Type=simple
