@@ -182,14 +182,16 @@ int main(int argc, char ** argv) {
 		return parse_args(argc - 2, &argv[2], args) &&
 			read_apply_mode(true, arg(args, "trigger")->present) ? 0 : 1;
 	} else if (argc >= 2 && !strcmp(argv[1], "measure")) {
-		struct arg_t args[3] = {
+		struct arg_t args[4] = {
 			ARG_STRING('f', "format", arg_check_measure_format, "terminal"),
 			ARG_FLOAT('s', "sleep", arg_check_measure_sleep, 1),
+			ARG_EMPTY('1', "once", NULL),
 			ARG_END
 		};
 		return parse_args(argc - 2, &argv[2], args) &&
 			measure_mode(!strcmp("csv", arg(args, "format")->value),
-				arg(args, "sleep")->float_value) ? 0 : 1;
+				arg(args, "sleep")->float_value,
+				arg(args, "once")->present) ? 0 : 1;
 	} else if (argc >= 2 && !strcmp(argv[1], "daemon")) {
 		return parse_args(argc - 2, &argv[2], NULL) &&
 			daemon_mode() ? 0 : 1;
@@ -201,6 +203,7 @@ int main(int argc, char ** argv) {
 			"  measure                  measure power consumption\n"
 			"    -f, --format <format>  output format (terminal, csv)\n"
 			"    -s, --sleep <interval> sleep interval in seconds\n"
+			"    -1, --once             measure only once then exit\n"
 			"  daemon                   run in daemon mode\n");
 		return argc == 1 ? 0 : 1;
 	} else {

@@ -250,13 +250,18 @@ static void sigint_handler(UNUSED int sig) {
 	interrupted = true;
 }
 
-bool measure_mode(bool csv, float sleep) {
+bool measure_mode(bool csv, float sleep, bool once) {
 	char buf[BUFSZ];
 	int maxname = 0;
 	struct rapl_t * rapl = rapl_init();
 	struct array_t * coretemp = get_coretemp(&maxname);
 	char degstr[5] = " C";
 	bool tty = isatty(1);
+
+	struct timespec sleep_spec;
+	sleep_spec.tv_sec = (time_t) sleep;
+	sleep_spec.tv_nsec = (suseconds_t) ((sleep - sleep_spec.tv_sec)
+		* 1000000000.);
 
 	if (rapl) {
 		int i;
@@ -265,12 +270,9 @@ bool measure_mode(bool csv, float sleep) {
 			int length = strlen(device->name);
 			maxname = length > maxname ? length : maxname;
 		}
+		rapl_measure(rapl);
+		nanosleep(&sleep_spec, NULL);
 	}
-
-	struct timespec sleep_spec;
-	sleep_spec.tv_sec = (time_t) sleep;
-	sleep_spec.tv_nsec = (suseconds_t) ((sleep - sleep_spec.tv_sec)
-		* 1000000000.);
 
 	setlocale(LC_CTYPE, "");
 	if (!csv) {
@@ -295,7 +297,7 @@ bool measure_mode(bool csv, float sleep) {
 	struct timespec csv_start;
 	if (csv) {
 		clock_gettime(CLOCK_MONOTONIC, &csv_start);
-	} else if (tty) {
+	} else if (tty && !once) {
 		/* clear the screen */
 		printf("\x1b[H\x1b[J");
 		/* hide the cursor */
@@ -303,7 +305,7 @@ bool measure_mode(bool csv, float sleep) {
 	}
 	bool nl = false;
 	while (!interrupted) {
-		if (!csv && tty) {
+		if (!csv && tty && !once) {
 			/* move the cursor */
 			printf("\x1b[H");
 		}
@@ -325,12 +327,15 @@ bool measure_mode(bool csv, float sleep) {
 		if (csv) {
 			printf("\n");
 		}
+		if (once) {
+			break;
+		}
 		fflush(stdout);
 		if (!interrupted) {
 			nanosleep(&sleep_spec, NULL);
 		}
 	}
-	if (!csv && tty) {
+	if (!csv && tty & !once) {
 		/* show the cursor */
 		printf("\x1b[?25h");
 	}

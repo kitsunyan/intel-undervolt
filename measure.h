@@ -3,6 +3,6 @@
 
 #include <stdbool.h>
 
-bool measure_mode(bool csv, float sleep);
+bool measure_mode(bool csv, float sleep, bool once);
 
 #endif
