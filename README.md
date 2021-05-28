@@ -2,7 +2,7 @@
 
 intel-undervolt is a tool for undervolting and throttling limits alteration for Intel CPUs.
 
-Undervolting works on Haswell and newer CPUs and based on the content of
+Undervolting works from Haswell up to Ice Lake. Tiger Lake and above are not compatible. Based on the content of
 [this article](https://github.com/mihic/linux-intel-undervolt).
 
 ## Disclaimer
