@@ -15,6 +15,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define DIR_HWMON "/sys/class/hwmon"
 #define BUFSZ 80
