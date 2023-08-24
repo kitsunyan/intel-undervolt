@@ -1,4 +1,4 @@
-CC = gcc
+CC ?= gcc
 CFLAGS =
 EXTRA_CFLAGS = -Wall -Wextra
 DESTDIR =
